@@ -1,0 +1,422 @@
+%\documentclass[a4paper,twoside,11pt]{report}
+\documentclass[12pt]{article}
+\usepackage[pdftex]{graphicx}
+%\usepackage[left=3cm,top=3cm,bottom=3cm,right=3cm]{geometry}
+\usepackage{amsmath,amssymb,amsfonts} % Typical maths resource packages
+\usepackage{graphics}         % Packages to allow inclusion of graphics
+\usepackage{color}          % For creating coloured text and background
+\usepackage{amsthm}
+\usepackage{array}
+\usepackage{epsfig}
+\usepackage{multirow}  % for multiple rows in tabular
+\usepackage{epsfig}       % to insert PostScript figures
+\usepackage{rotating}      % for sideways tables/figures
+\usepackage{pdflscape}    % for lanscaping for large tables and figures
+\usepackage{xy}
+\usepackage{here}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{ctable}
+\usepackage{moreverb}
+\usepackage{fancyhdr}
+\usepackage{lscape}
+%\usepackage{sinput}
+\usepackage{relsize}
+\usepackage{here}
+\usepackage{fullpage}  %makes sure tables fit
+%\usepackage{anysize}
+%\marginsize{2cm}{2cm}{2cm}{2cm}
+\usepackage{relsize}
+\usepackage{setspace}
+\usepackage{longtable} %to create large tables
+\usepackage{verbatim}
+\usepackage{float}
+\restylefloat{table}
+
+\usepackage[pdftex,plainpages=false, letterpaper, bookmarks, bookmarksnumbered, colorlinks, linkcolor=blue, citecolor=blue, filecolor=blue, urlcolor=blue]{hyperref}
+\setcounter{section}{-1}
+%\nonumber
+\usepackage{subfig}
+
+% Use the PLoS provided bibtex style
+\bibliographystyle{ieeetr}
+% or: plain,unsrt,alpha,abbrv,acm,apalike,...
+
+% Remove brackets from numbering in List of References
+%\makeatletter
+%\renewcommand{\@biblabel}[1]{\quad#1.}
+%\makeatother
+
+
+% Heading Information
+\pagestyle{plain}
+\vspace{-1.0em}
+\title{ADGC HRC Imputed Merged Data Workflow}
+
+\author{This data set was prepared by Kevin L. Boehme (Brigham Young University, \\
+kevinlboehme@gmail.com), Shubhabrata Mukherjee "Joey" (University of \\
+Washington, smukherj@uw.edu), John Kauwe (Brigham Young University, \\
+kauwe@byu.edu) and Paul Crane (University of Washington). These \\
+individuals should be added as named coauthors when these data \\
+are used for publications. \\
+\\
+\small College of Life Sciences \\
+\small Brigham Young University \\
+\small Provo, UT \\
+\\
+\small Department of Medicine\\
+\small Division of General Internal Medicine \\
+\small University of Washington\\
+\small Seattle, WA}
+
+\date{\today}
+\begin{document}
+%\sloppy
+
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+This document details the analyses we performed to generate the combined HRC data sets from the ADGC data sets. These data sets may prove useful to other investigators for a variety of purposes. Of course, for other purposes, the parent data sets may be a better choice. In either case, some of the steps we took to ensure that the structure of all of the data sets were the same may prove useful.
+
+In broad strokes, this document details steps we took to go from ADGC HRC imputed Phase 1 and Phase 2 files to generate QC'ed dosage vcfs and PLINK hard call thresholded files.
+
+To accomplish these steps we used the following software packages:
+
+\begin{itemize}
+
+\item Snakemake (\cite{koster2012snakemake} \url{https://snakemake.readthedocs.io/en/stable/index.html})
+
+\item QCTools v2 (\cite{qctoolsv2}; \url{http://www.well.ox.ac.uk/~gav/qctool_v2/index.html})
+
+\item PLINK 1.9 (\cite{plink2} \cite{purcell2007plink}; \url{https://www.cog-genomics.org/plink2})
+
+% \item GTOOL (\cite{gtool};  \url{http://www.well.ox.ac.uk/~cfreeman/software/gwas/gtool.html})
+
+\item KING-Robust (\cite{king}; \url{http://people.virginia.edu/~wc9c/KING/index.html})
+
+\item EIGENSTRAT (\cite{price2006principal}; \url{http://genetics.med.harvard.edu/reich/Reich\_Lab/Software.html})
+
+\end{itemize}
+
+These analyses were accomplished using the computational resources of the Fulton Supercomputing Lab (FSL) at Brigham Young University. FSL maintains 896 compute nodes (servers) comprising 12,100 processor cores with a compute capacity of over 120 Teraflops. All resources are supported by approximately one petabyte of high performance storage (\url{https://marylou.byu.edu/about}).
+
+Section 1 of this document details specific elements of the steps taken to accomplish this work. Section 2 provides boilerplate methods text that may be used in publications that use these data. Section 3 provides references cited.
+
+
+\section{ADGC HRC combined data workflow}
+
+\textbf{Note: All code used in this project can be found on github \url{https://github.com/KBoehme/ADGC_HRC_MERGE}}
+
+
+\subsection{Pre-Combined Processing}
+Goal: First pass SNP QC and produce merged, per-chromosome .gen files and a single combined .sample file.
+
+\begin{table}[H] \caption{ADGC\_HRC .gen and .fam file summary statistics}
+\begin{center}
+\begin{tabular}{lccccc}
+\hline
+Dataset & SNPs & Individuals & Size (GB) & Low Info ($<$.3) & Low Info (\%) \\ \hline
+ACT1 & 39117111 & 2548 & 38 & 18569040 & 0.47 \\
+ACT2 & 39127694 & 383 & 7.9 & 25246796 & 0.65 \\
+ADC1 & 39117110 & 2738 & 43 & 11841628 & 0.30 \\
+ADC2 & 39117110 & 927 & 16 & 22221054 & 0.57 \\
+ADC3 & 39127707 & 1756 & 25 & 19351549 & 0.49 \\
+ADC4 & 39127695 & 1048 & 17 & 19763571 & 0.51 \\
+ADC5 & 39127695 & 1222 & 19 & 21052435 & 0.54 \\
+ADC6 & 39127693 & 1326 & 20 & 20595016 & 0.53 \\
+ADC7 & 39127693 & 1465 & 22 & 20351107 & 0.52 \\
+ADNI & 39127689 & 691 & 13 & 23363694 & 0.60 \\
+BIOCARD & 39127693 & 201 & 5.5 & 25338180 & 0.65 \\
+CHAP2 & 39127694 & 743 & 13 & 22645052 & 0.58 \\
+EAS & 39127696 & 283 & 6.3 & 25983088 & 0.66 \\
+GSK & 39117177 & 1572 & 37 & 23043460 & 0.59 \\
+LOAD & 39127741 & 4392 & 56 & 17215964 & 0.44 \\
+MAYO & 39117108 & 1970 & 38 & 20315599 & 0.52 \\
+MIRAGE & 39117109 & 1487 & 31 & 21069253 & 0.54 \\
+NBB & 39127697 & 299 & 6.5 & 26732501 & 0.68 \\
+OHSU & 39127684 & 607 & 14 & 25097262 & 0.64 \\
+RMAYO & 39127694 & 428 & 8.3 & 25698016 & 0.66 \\
+ROSMAP1 & 39065866 & 1649 & 29 & 21862619 & 0.56 \\
+ROSMAP2 & 39127699 & 532 & 11 & 17278048 & 0.44 \\
+TARC1 & 39127689 & 617 & 13 & 24333366 & 0.62 \\
+TGEN2 & 39117117 & 1485 & 26 & 21011080 & 0.54 \\
+UKS & 39117115 & 1741 & 28 & 20608444 & 0.53 \\
+UMVUMSSM & 117372659 & 2467 & 36 & 66392871 & 0.57 \\
+UMVUTARC2 & 39127693 & 540 & 11 & 21328491 & 0.55 \\
+UPITT & 39127781 & 2212 & 32 & 18860900 & 0.48 \\
+WASHU1 & 39127700 & 668 & 13 & 23744067 & 0.61 \\
+WASHU2 & 37200188 & 235 & 6.4 & 22648158 & 0.61 \\
+WHICAP & 39127693 & 644 & 11 & 23774868 & 0.61 \\ \hline
+Totals & 1289129690 & 38876 & 652.9 & 717337177 & 0.56 \\ \hline
+\end{tabular}
+\end{center}
+\label{table:full}
+\end{table}
+
+\begin{itemize}
+
+\item Initially, all of the genotype data were in SNPTEST format (.gen.gz) files, while sample information was in PLINK (.fam) format. For a description of the file format see \url{http://www.stats.ox.ac.uk/~marchini/software/gwas/file_format.html} and \url{https://www.cog-genomics.org/plink/1.9/formats#fam}. There were 31 studies with each study divided by autosomal chromosome (1-22) for a total of 682 GEN files.
+
+\item PLINK sample level information files (.fam) were first converted to SNPTEST format files (.sample) in order to be used by the Oxford suite of tools.
+
+\item Next, filtering low info and duplicate variants. The info metric is used as a measure of imputation quality with values near 1 meaning the SNP was imputed with high certainty (see \url{http://mathgen.stats.ox.ac.uk/impute/output\_file\_options.html\#info\_metric\_details}). Using a custom python script, variants with a low (info score \textless 0.3) were written to a file. Multi-allelic SNP's (duplicate chromosome:position) were addressed by only keeping the most common SNP based on the GNOMAD\cite{lek2016analysis} dataset. If the variant wasn't found in GNOMAD its MAF inside the dataset (provided in the .info files) was used. The multi-allelic SNP's to be removed were written to a file. QCtools v2 was then used to filter using this list of variants.
+
+\item We then used QCtools v2 to combine the gen and sample files for each autosomal chromosome. Qctools v2 produced md5sum identical combined .sample files for each chromosome. Only one was kept and the others discarded.
+\end{itemize}
+
+
+\subsection{Post-Combined Processing}
+
+Goal: Second pass SNP QC, produce finalized data formats: per-chromosome VCF with dosages and per-chromosome PLINK .bed, .bim, .fam set.
+
+\begin{itemize}
+
+\item Using QCtools v2, we generated a SNP statistics file for each chromosome of the merged dataset. Using awk we extracted a list of rare variants for exclusion ( MAF $<$ 0.0001) and wrote to a file. Qctools v2 was then used to filter using the variant list.
+
+% Use this to grab
+% grep "\-\- in input file(s):" *.log
+\begin{table}[H] \caption{ADGC\_HRC .gen and .fam file summary statistics}
+\begin{center}
+\begin{tabular}{cc}
+\hline
+Total SNPs & 39,065,839 \\
+MAF filtered SNPs & 10,678,309 \\
+\end{tabular}
+\end{center}
+\label{table:full}
+\end{table}
+
+\item Next step was to convert from the SNPTEST format to a vcf.
+
+\item Next step was to convert from the SNPTEST format to a PLINK format (.bed, .bim, .fam) and
+
+\item We took these modified files and used PLINK 1.9 to convert them to best guess PLINK allele call format files: bed/bim/fam.
+
+
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Further processing of PLINK binary files}
+
+We completed several processing steps to prepare to merge the PLINK binary files together.
+
+\begin{itemize}
+\item We wrote a perl script to identify duplicate SNPs within each data set and used PLINK 1.9 to exclude these. Note that PLINK 1.9 removes both instances of the duplicates. Below we provide a summary table of the number of duplicate SNPs removed from each study (Table \ref{table:dups}). We provide a file with the rs numbers of the SNPs excluded from each study in the file ADGC\_duplicate\_SNPs.txt.
+
+\begin{table}[H] \caption{Duplicates Removed}
+\begin{center}
+\begin{tabular}{|lc|cc|}
+\hline
+Study (Phase 1)	&	Duplicates 	&	Study (Phase 2)	&	Duplicates \\
+\hline
+ACT 1	&	10	&	ACT 2	&	10	\\
+ADC 1	&	10	&	ADC 4	&	10	\\
+ADC 2	&	10	&	ADC 5	&	10	\\
+ADC 3	&	10	&	ADC 6	&	9	\\
+ADNI	&	10	&	BIOCARD	&	10	\\
+GSK	&	8	&	CHAP2	&	10	\\
+NIA-LOAD	&	12	&	EAS	&	10	\\
+MAYO	&	12	&	UMVUTARC2	&	10	\\
+MIRAGE	&	12	&	NBB	&	33	\\
+OHSU	&	12	&	RMAYO	&	10	\\
+ROSMAP	&	10	&	ROSMAP2	&	10	\\
+TGEN2	&	12	&	TARCC1	&	10	\\
+UMVUMSSM\_A	&	10	&	UKS	&	10	\\
+UMVUMSSM\_B	&	10	&	WASHU2	&	10	\\
+UMVUMSSM\_C	&	10	&	WHICAP	&	10	\\
+UPITT	&	12	& & \\
+WASHU	&	12	& & \\	 \hline
+\end{tabular}
+\end{center}
+\label{table:dups}
+\end{table}
+
+\item We combined the 22 PLINK-formatted files (one per chromosome) from each study into a single dataset per study
+
+\item We checked the consistency of the genomic physical location data across all of the data sets, choosing ADC1 as our reference dataset because it contained the most SNPs at this point. We identified 4 SNPs within the UM/VU/MSSM A and UM/VU/MSSM B files that had different genomic physical locations specified than in all of the other datasets. Those SNPs were rs4433978, rs4664277, rs4256345, and rs3819263. We changed the genomic physical location data in the files for the two UM/VU/MSSM datasets to match the genomic physical location data in all of the rest of the datasets.
+
+\item After confirming the genomic physical location was identical across studies, we then split each study’s data back into 22 files.
+
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Merging data sets together}
+%-------------------------------------------------------------------------------
+\begin{itemize}
+
+\item Again, using ADC1 as our reference data set, we systematically merged each of the other datasets.
+
+\item In the process of merging, any strand flip errors will cause PLINK to stop and print out the offending SNPs. We found only 1 variant on chromosome 6 (rs9453295) which was flipped in 13 of the data sets (ADC2, ADC4, ADC5, ADC6, BIOCARD, CHAP, EAS, MTV, NBB, RMAYO, ROSMAP2, WASHU2, and WHICAP). We recoded this variant in those datasets so that all strands matched ADC1.
+
+\item We used a MAF of 0.01 to filter the resulting merged data sets.
+
+\item We then combined all of the chromosomes together to generate a single combined data set.
+
+\end{itemize}
+
+%------------------------------------------------------------------------------
+
+%-------------------------------------------------------------------------------
+\subsection{Identifying common genotyped (not imputed) SNPs and QC steps}
+
+In order to look at a) relatedness across studies and b) calculate principal components to account for population-specific variations in allele distributions, we created a data set with observed/raw SNPs which were common across the 32 studies.
+
+\begin{itemize}
+
+\item We extracted a common list of genotyped SNPs (no. of SNPs=17,160) across all ADGC studies based on quality controlled GWAS data that can be found here. Steps we did to do this are as follows:
+\begin{itemize}
+\item Downloaded GWAS data.
+\item Using R \cite{r_stats} we found the intersect of all sets of SNPs across each study.
+
+\end{itemize}
+
+\item There are 17,160 directly genotyped SNPs in common across all of the 32 studies. A file with those rs numbers is named ADGC\_common\_genotyped\_SNPs.txt can be found here.
+
+\item Symmetrical or strand-ambiguous SNPs can create problems in some settings, especially when considering data across multiple studies. We found no symmetrical SNPs were present in the common, directly genotyped dataset.
+
+\item Some of the directly genotyped SNPs are in LD with each other. From the previous step, a LD thinned/pruned data set was created by invoking the following thresholds in PLINK (--maf 0.01 --geno 0.02 --indep-pairwise 1500 150 0.2). The LD pruned data set contains 14,675 SNPs is named ADGC\_LD\_pruned\_common\_genotyped\_SNPs.txt and can be found here. These SNPs were used for the cryptic relatedness analysis and the generation of principle components (See following sections).
+
+\end{itemize}
+
+\subsection{Addressing known and cryptic relatedness}
+
+\noindent The ADGC family of data sets includes two that are family-based (NIA-LOAD and MIRAGE). In addition, study participants may be related to other study participants within a study and also across studies. We used KING-Robust to purge study participants more closely related than 3rd degree relatives from our unrelated dataset.
+
+\begin{itemize}
+
+\item We used the ADGC\_LD\_pruned\_common\_genotyped\_SNPs.txt file for this step.
+
+\item We used a kinship coefficient cut-off of 0.0442, which indicates 3rd degree relatives, in KING-Robust \cite{king}.
+
+\begin{itemize}
+\item We compared the number of people we would exclude if we set the threshold at 2nd degree relatives, and found that extending to 3rd degree relatives came at a cost of only n=84 study participants.
+\end{itemize}
+
+\item The ADGC\_full.[bim$|$bam$|$fam$|$covar] dataset includes data from 37,635 individuals, while the ADGC\_unrelated.[bim$|$bam$|$fam$|$covar] dataset includes data from 28,730 individuals who are no more closely related than 3rd degree relatives.
+
+\end{itemize}
+
+%-------------------------------------------------------------------------------
+\subsection{Principal components calculation}
+We used the ADGC\_LD\_pruned\_common\_genotyped\_SNPs.txt file for this step.
+\begin{itemize}
+\item We used EIGENSTRAT \cite{price2006principal} to calculate the first 10 PCs for the 28,730 unrelated individuals. The file with the first 10 PCs for the 28,730 unrelated people is called ADGC\_unrelated\_PCs.pca.evec, and can be found here.
+
+\item These PCs were added to the covariate file, which already contains demographic variables such as sex, age, APOE genotype, etc.
+
+\end{itemize}
+
+\subsection{Final files}
+
+The final deliverables consisting of data previously referenced within the text as well as some additional README files note yet mentioned are as follows:
+
+\subsubsection{Data Files}
+
+\begin{itemize}
+\item \textbf{ADGC\_full.[bim$|$bam$|$fam$|$covar]} - ADGC combined data set with all individuals (n=37,635).
+
+\item \textbf{ADGC\_unrelated.[bim$|$bam$|$fam$|$covar]} - ADGC combined data set with only unrelated individuals (n=28,730).
+
+\item \textbf{ADGC\_duplicate\_SNPs.txt} - List of duplicate SNPs removed from each study.
+
+\item \textbf{ADGC\_common\_genotyped\_SNPs.txt} - List of genotyped SNPs that are present in each study. (SNPs = 17,160)
+
+\item \textbf{ADGC\_LD\_pruned\_common\_genotyped\_SNPs.txt} - List of LD-pruned genotyped SNPs that are present across all studies.
+
+\item \textbf{ADGC\_unrelated\_PCs.pca.evec} - EIGENSTRAT output containing first 10 PCs for all 28,730 unrelated samples.
+
+\end{itemize}
+
+\subsubsection{Readme Files}
+
+\begin{itemize}
+
+\item \textbf{ADGC\_create\_combined\_dataset\_codes\_09132014.txt} - All codes used in this project.
+
+\item \textbf{ADGC\_covar\_DataDictionary.xlsx} - describes the covariate file variables
+
+\end{itemize}
+
+\subsubsection{Final Notes}
+\begin{itemize}
+
+\item Please note that we did not filter due to missing covariate data. Some participants have missing covariate data, including missing case/control status
+
+\item The covariate file may be updated; investigators should check with ADGC for future updates.
+
+\item Table \ref{table:full} on the next page includes sex, case/control status, and overall sample size of the ADGC\_full.[bim$|$bam$|$fam$|$covar] dataset for each of the studies in ADGC wave 1 and ADGC wave 2.
+
+\item Table \ref{table:unrelated} on the subsequent page includes the same variables for the ADGC\_unrelated.[b-
+\newline
+im$|$bam$|$fam$|$covar] dataset.
+
+\end{itemize}
+
+\begin{table}[H] \caption{ADGC\_full Sample Size}
+\begin{center}
+\begin{tabular}{lcccc}
+\hline
+Study 	&	Sex(M/F)	&	Cases/Controls	&	Sample Size	\\ \hline
+\end{tabular}
+\end{center}
+\label{table:full}
+\end{table}
+
+\begin{table}[H] \caption{ADGC\_unrelated Sample Size}
+\begin{center}
+\begin{tabular}{lcccc}
+\hline
+Study 	&	Sex(M/F)	&	Cases/Controls	&	Sample Size	\\ \hline
+ACT 1	&	886/1,161	&	479/1,348	&	2,047	\\
+ADC 1	&	947/1,137	&	1,503/543	&	2,084	\\
+ADC 2	&	328/364	&	546/121	&	692	\\
+ADC 3	&	593/721	&	711/464	&	1,314	\\
+ADNI	&	317/207	&	215/140	&	524	\\
+GSK/GenADA	&	608/952	&	796/764	&	1,560	\\
+LOAD/NIA-LOAD	&	628/1,069	&	745/801	&	1,697	\\
+YOUNKIN/MAYO	&	706/835	&	616/925	&	1,541	\\
+MIRAGE	&	274/429	&	398/294	&	705	\\
+KRAMER/OHSU	&	142/188	&	59/109	&	330	\\
+ROSMAP	&	502/1,119	&	364/853	&	1,621	\\
+TGEN2	&	560/698	&	770/488	&	1,258	\\
+MIAMI/UMVUMSSM	&	817/1,380	&	1,085/1,112	&	2,197	\\
+KAMBOH2/UPITT	&	810/1,377	&	1,267/834	&	2,187	\\
+WASHU/GOATE	&	217/295	&	312/166	&	512	\\ \hline
+ACT 2	&	144/158	&	18/5	&	302	\\
+ADC 4	&	332/443	&	287/340	&	775	\\
+ADC 5	&	370/526	&	273/496	&	896	\\
+ADC 6	&	432/571	&	363/304	&	1,003	\\
+BIOCARD	&	75/113	&	8/123	&	188	\\
+CHAP	&	236/348	&	20/164	&	584	\\
+EAS	&	116/132	&	10/209	&	248	\\
+MTV	&	177/261	&	241/194	&	438	\\
+NBB	&	96/204	&	215/85	&	300	\\
+RMAYO	&	220/133	&	12/271	&	353	\\
+ROSMAP 2	&	105/323	&	62/237	&	428	\\
+TARC1	&	170/260	&	286/144	&	431	\\
+UKS	&	845/895	&	767/973	&	1,740	\\
+WASHU 2	&	68/67	&	30/65	&	135	\\
+WHICAP	&	246/394	&	74/562	&	640	\\ \hline
+Total (Combined Phase 1 and 2)	&	11,967/16,760	&	12,532/13,134	&	28,730	\\ \hline
+\end{tabular}
+\end{center}
+\label{table:unrelated}
+\end{table}
+
+
+\section{Boilerplate methods text}
+
+We transformed files from IMPUTE2/SNPTEST format to PLINK binary format. We filtered SNPs imputed with low information (info<0.5) from each dataset. We removed duplicate SNPs from each dataset. We identified 4 SNPs in 2 datasets with different genome physical locations and modified those so all physical locations were the same across all datasets. We identified one SNP with a flipped strand in 13 datasets, and flipped it so all SNPs had the same strand orientation in all datasets. We then merged all of the datasets together. We used a minor allele frequency of 0.01 to retain common SNPs.
+
+We used directly genotyped (not imputed) SNPs for identifying cryptic relatedness and for calculating PCs to account for population structure. There were 17,146 directly genotyped SNPs in common across all 32 studies, none of which were symmetrical. We used PLINK to LD-prune these SNPs using the following settings: maf 0.01, geno 0.02, indep-pairwise 1500 150 0.2. These steps resulted in an LD-pruned directly observed non-ambiguous dataset with 14,675 SNPs.
+
+We used KING-Robust to identify the 28,730 participants who were no more related than 3rd degree relatives (kinship coefficient 0.0442).
+
+We used EIGENSTRAT to calculate the first 10 principal components from the combined, directly observed dataset.
+
+\section{References}
+% The bibtex filename
+\bibliography{adgc_hrc}
+
+\end{document}

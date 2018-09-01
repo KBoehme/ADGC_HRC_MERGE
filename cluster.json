@@ -1,0 +1,49 @@
+
+{
+    "__default__" :
+    {
+        "account" : "fslcollab192",
+        "time" : "00:30:00",
+        "ntasks" : 1,
+        "mem": "5000M",
+        "name": "{rule}.{wildcards}",
+        "mail-user": "kevinlboehme@gmail.com,taq1fok1@gmail.com",
+        "mail-type": "FAIL",
+        "gid": "fslg_KauweLab"
+    },
+    "write_dup_and_low_info_variants" :
+    {
+      "time": "02:00:00",
+      "mem": "15000M"
+    },
+    "filter_low_info_dup_variants" :
+    {
+        "time": "07:00:00",
+        "mem": "30000M"
+    },
+    "qctools_combine_variants":
+    {
+        "time": "40:00:00",
+        "mem": "40000M"
+    },
+    "generate_snp_statistics":
+    {
+        "time": "08:00:00",
+        "mem": "10000M"
+    },
+    "write_low_maf_snps_per_chromosome":
+    {
+        "time": "00:30:00",
+        "mem": "10000M"
+    },
+    "filter_low_maf_variants":
+    {
+        "time": "50:00:00",
+        "mem": "60000M"
+    },
+    "convert_to_vcf":
+    {
+        "time": "24:00:00",
+        "mem": "50000M"
+    }
+}

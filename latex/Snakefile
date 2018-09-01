@@ -1,0 +1,37 @@
+""" ADGC HRC Merge
+
+    Generate the latex document based on source files, intermediate files, etc.
+
+    snakemake -np --verbose -j 999 --cluster-config ../scripts/relatedness/cluster.json -s ../scripts/relatedness/Snakefile --cluster \
+    "sbatch \
+    --ntasks {cluster.ntasks} \
+    --time {cluster.time} \
+    --mem {cluster.mem} \
+    --job-name {cluster.name} \
+    --mail-type {cluster.mail-type} \
+    --mail-user {cluster.mail-user} \
+    --parsable" \
+    --cluster-status ../scripts/slurm_status.py
+"""
+
+from pathlib import Path
+
+ROOT = "/fslhome/fslcollab192/compute"
+WORKFLOW_NAME = "combine_workflow"
+
+ORIGINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data/ADGC_HRC")
+PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINED")
+RESOURCES = os.path.join(ROOT, "resources")
+SCRIPTS = os.path.join(ROOT, "scripts", "python_scripts")
+
+LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
+
+rule generate_latex_document:
+    """ Generate the document based on the template
+    """
+    input:
+        template=os.path.join(ROOT, "scripts", "latex", "adgc_hrc_merge_template.tex")
+    output:
+        os.path.join(ROOT, "ADGC_HRC_COMBINED", "adgc_hrc_merge.tex")
+    run:
+        utils.generate_latex_doc(input.template, output)

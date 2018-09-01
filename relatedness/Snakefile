@@ -1,0 +1,77 @@
+""" ADGC 2.0 - Relatedness analysis
+
+ General overview of process
+    1. Given raw genotyped snps for each study, create a list of common snps.
+    2. LD-prune list of common snps.
+    3. Extract these subset of snps from plink files.
+    4. Run King-Robust on this LD-pruned, common dataset to generate list of related (within 3rd degree) individuals.
+    6. Remove related individuals leaving one
+    7. Run Eigenstrat on this LD-pruned, common, unrelated dataset to generate PC's
+    8. Merge PC's with sample covariate files.
+
+
+    snakemake -np --verbose -j 999 --cluster-config ../scripts/relatedness/cluster.json -s ../scripts/relatedness/Snakefile --cluster \
+    "sbatch \
+    --ntasks {cluster.ntasks} \
+    --time {cluster.time} \
+    --mem {cluster.mem} \
+    --job-name {cluster.name} \
+    --mail-type {cluster.mail-type} \
+    --mail-user {cluster.mail-user} \
+    --parsable" \
+    --cluster-status ../scripts/slurm_status.py
+"""
+
+from pathlib import Path
+
+# This is the shared folder location, however due to lack of space cant be used.
+# ROOT = "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/"
+ROOT = "/fslhome/fslcollab192/compute"
+WORKFLOW_NAME = "relatedness_workflow"
+# RESOURCES_DATA_FOLDER = "resources"
+# SCRIPTS_DATA_FOLDER = "scripts/python_scripts"
+BIM_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data", "ADGC_Raw", "bims")
+PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINED", "process", WORKFLOW_NAME)
+
+# RESOURCES = os.path.join(ROOT, RESOURCES_DATA_FOLDER)
+# SCRIPTS = os.path.join(ROOT, SCRIPTS_DATA_FOLDER)
+LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
+
+localrules: bim_to_snp_ids_only, get_common_snps
+
+BIM_NAMES = [Path(name).stem for name in os.listdir(BIM_DATA_SOURCE)]
+
+rule all:
+    """ This is an artificial snakemake rule that basically specifies as input
+    the final files im attempting to get out of the workflow."""
+    input:
+        os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+
+rule get_common_snps:
+    """ Using a simple python script intersect all input files. Input files
+    are expected to be a snp id per line."""
+    input:
+        # snps=expand(os.path.join(PROCESS_DATA_SOURCE, "bim_snps", "{study}.bim"), study=wildcards.study) # Would love to be able to do this..
+        snps=lambda wildcards: [os.path.join(PROCESS_DATA_SOURCE, "bim_snps", "{}.bim".format(bim)) for bim in BIM_NAMES]
+    output:
+        common_snps=os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+    run:
+        setlist = []
+        for file in input:
+            print("Working on file: {}".format(file))
+            setlist.append(set(line.strip() for line in open(file, 'r')))
+        common_snps = set.intersection(*setlist)
+        print(output.common_snps)
+        with open(output.common_snps, "w") as f:
+            for snp in common_snps:
+                f.write(snp + "\n")
+
+rule bim_to_snp_ids_only:
+    """ awks out snp ids from bim files and write to new file.
+    """
+    input:
+        bim=os.path.join(BIM_DATA_SOURCE, "{study}.bim")
+    output:
+        snp=os.path.join(PROCESS_DATA_SOURCE, "bim_snps", "{study}.bim")
+    shell:
+        "awk '{{print $2}}' {input.bim} > {output.snp}"
