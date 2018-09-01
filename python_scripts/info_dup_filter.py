@@ -14,7 +14,7 @@ from collections import defaultdict
 1       324822  A       G       2.16474e-05
 """
 
-def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_threshold, output):
+def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_threshold, output, dups_output):
     """ Python program that takes input list of snps and filters on both low
     info and duplicate variants that are more rare given gnomad dataset.
 
@@ -27,6 +27,8 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
     # Write header to output file.
     # Important that its space delimited and the first 4 columns are there.
     outfile = open(output, 'w+')
+    dups_outfile = open(dups_output, 'w+')
+
     outfile.write("SNPID rsid chromosome position ref alt\n")
 
     # Open input and loop through looking for duplicates
@@ -54,20 +56,17 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
                 in_snps_maf_dict["{}+{}".format(key, alt)] = maf
                 in_snps[key].append(alt)
 
-    if not remove_dups: # We are done then
-        sys.exit(0)
-
     # Read in the gnomad data
-    gnomad_af = {}
-    with open(gnomad_af_file, 'r') as f:
-        for line in f:
-            sline = line.split()
-            if len(sline[2]) > 1 or len(sline[3]) > 1: # Skip anything not a snp
-                pass
-            else:
-                #1       12272   G       A       0.0
-                key = "{}+{}+{}+{}".format(sline[0], sline[1], sline[2], sline[3])
-                gnomad_af[key] = float(sline[4])
+    # gnomad_af = {}
+    # with open(gnomad_af_file, 'r') as f:
+    #     for line in f:
+    #         sline = line.split()
+    #         if len(sline[2]) > 1 or len(sline[3]) > 1: # Skip anything not a snp
+    #             pass
+    #         else:
+    #             #1       12272   G       A       0.0
+    #             key = "{}+{}+{}+{}".format(sline[0], sline[1], sline[2], sline[3])
+    #             gnomad_af[key] = float(sline[4])
 
     # Now deal with duplicates
     missings = 0
@@ -81,15 +80,8 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
             highest_maf_alt = None
             for alt_dup in v:
                 variant_key = "{}+{}".format(k, alt_dup)
-                af = gnomad_af.get(variant_key)
-                if not af:
-                    # print("Error: Didnt find a MAF for: {}".format(k, v))
-                    missings += 1
-                    # print("Attempting to use MAF from info file.")
-                    af = in_snps_maf_dict[variant_key]
-                else:
-                    found += 1
-                # print("comparing {}: {} >= {}".format(alt_dup, af, highest_maf))
+                missings += 1
+                af = in_snps_maf_dict[variant_key]
                 if af is None:
                     raise RuntimeError("Didnt find a MAF for variant: {}".format(variant_key))
                 if af >= highest_maf:
@@ -105,7 +97,7 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
                             ref,
                             highest_maf_alt] # Must write previously highest maf alt
                         # print("Writing variant: {}".format(' '.join(out_line)))
-                        outfile.write(" ".join(out_line)+"\n")
+                        dups_outfile.write(" ".join(out_line)+"\n")
                     highest_maf_alt = alt_dup # Now update highest maf allele
                     highest_maf = af
                 else:
@@ -124,5 +116,6 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
     print("Missings = {}".format(missings))
     print("Found in gnomad = {}".format(found))
     outfile.close()
+    dups_outfile.close()
 
 write_low_info_and_dups_filter_file(*sys.argv[1:])

@@ -29,7 +29,7 @@ ROOT = "/fslhome/fslcollab192/compute"
 WORKFLOW_NAME = "combine_workflow"
 
 ORIGINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data/ADGC_HRC")
-PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINED", "process", WORKFLOW_NAME)
+PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "process", WORKFLOW_NAME)
 PRE_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "pre_combine")
 POST_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "post_combine")
 
@@ -135,7 +135,7 @@ rule convert_to_vcf:
     params:
         threshold=0.5001 # Lowest threshold QCtools allows.
     shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-95b281d264c6/build/release/qctool_v2.0-rc9 \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.combined_chr_bgen} \
             -s {input.sample_file} \
             --threshold {params.threshold} \
@@ -167,7 +167,7 @@ rule filter_low_maf_variants:
     log:
         os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "qctools", "chr{chr}_filter_maf_qctools.log")
     shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-95b281d264c6/build/release/qctool_v2.0-rc9 \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.combined_chr_bgen} \
             -assume-chromosome {wildcards.chr} \
             -og {output.filtered_vcf} \
@@ -215,7 +215,7 @@ rule generate_snp_statistics:
     log:
         os.path.join(POST_COMBINE_PREFIX, "filters", "chr{chr}snp-stats_qctools.log")
     shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-95b281d264c6/build/release/qctool_v2.0-rc9 \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.combined_chr_gen} \
             -snp-stats \
             -osnp {output.chr_snp_stats} \
@@ -253,7 +253,7 @@ rule qctools_combine_variants:
     params:
         combine_chrom_param=qctools_combine_params
     shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-95b281d264c6/build/release/qctool_v2.0-rc9 \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.base_gen_file} \
             -s {input.base_sample_file} \
             {params.combine_chrom_param} \
@@ -275,7 +275,7 @@ rule filter_low_info_dup_variants:
     log:
         os.path.join(LOGS, "filter_lowinfo", "pre_combine", "{ds}", "chr{chr}_qctools.log")
     shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-95b281d264c6/build/release/qctool_v2.0-rc9 \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.gen_file} \
             -og {output.filtered_gen} \
             -assume-chromosome {wildcards.chr} \
@@ -300,12 +300,12 @@ rule write_dup_and_low_info_variants:
         info_file=os.path.join(ORIGINAL_DATA_SOURCE, "{ds}", "{ds_lower}_info.txt"),
         gnomad_ref_data=os.path.join(RESOURCES, "gnomad", "gnomad_exomes_af_snps_only.txt")
     output:
-        filter_variant_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "filters", "{ds_lower}_info_dup_filter.txt")
-        dups_file=os.path.join(AUX, "{ds}", "filters", "{ds_lower}_info_dup_filter.txt")
+        filter_variant_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "filters", "{ds_lower}_info_dup_filter.txt"),
+        dups_file=os.path.join(AUXILLIARY_FOLDER, "duplicates", "{ds}_{ds_lower}_dups.txt")
     params:
         low_filter_threshold=".3"
     shell:
-        "{SCRIPTS}/info_dup_filter.py {input.info_file} {input.gnomad_ref_data} {params.low_filter_threshold} {output.filter_variant_file} "
+        "{SCRIPTS}/info_dup_filter.py {input.info_file} {input.gnomad_ref_data} {params.low_filter_threshold} {output.filter_variant_file} {output.dups_file}"
 
 rule create_sample_file_from_fam_per_study:
     """ Creates the sample files from fam files"""
