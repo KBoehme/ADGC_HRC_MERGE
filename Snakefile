@@ -113,15 +113,32 @@ rule all:
 #         --make-bed \
 #         --out {output}"
 
-# rule process_vcf:
-#     """ Fix the crappy vcf that comes out of qctools. """
+# rule cat_bgens:
+#     """Concatenate all the bgens into one humongous combined.bgen, to be converted to plink format. """
 #     input:
-#         os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
+#         bgens=lambda wildcards: [os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen") for chr in CHROMOSOME]
 #     output:
-         
-#     logs:
-
+#         concatenated_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen")
 #     shell:
+#         "cat-bgen -g {input.bgens} -og {output.concatenated_bgen}"
+
+# rule add_maf_to_vcf:
+#     input:
+#     output:
+#     shell:
+#         "export BCFTOOLS_PLUGINS=/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/bcftools-1.8/plugins/; \
+#         bcftools +fill-tags {input} -- -t AF > {output}"
+
+rule process_vcf:
+    """ Fix the crappy vcf that comes out of qctools, annotate it with rs#, strip ridiculous ",chr"
+    """
+    input:
+        vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"),
+        dbsnp_ref=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt")
+    output:
+        out_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
+    run:
+        utils.rs_annotate(input.vcf, input.dbsnp_ref, wildcards.chr, output.out_vcf)
 
 rule convert_to_vcf:
     """ Simply convert to vcf using qctools. Produces a vcf with GP and """
@@ -274,12 +291,14 @@ rule filter_low_info_dup_variants:
         filtered_gen=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.bgen")
     log:
         os.path.join(LOGS, "filter_lowinfo", "pre_combine", "{ds}", "chr{chr}_qctools.log")
+    threads: 4
     shell:
         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.gen_file} \
             -og {output.filtered_gen} \
             -assume-chromosome {wildcards.chr} \
             -excl-variants {input.filter_variants} \
+            -threads {threads} \
             -log {log}"
 
 rule write_dup_and_low_info_variants:

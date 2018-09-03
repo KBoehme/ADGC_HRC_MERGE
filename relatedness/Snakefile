@@ -31,7 +31,7 @@ WORKFLOW_NAME = "relatedness_workflow"
 # RESOURCES_DATA_FOLDER = "resources"
 # SCRIPTS_DATA_FOLDER = "scripts/python_scripts"
 BIM_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data", "ADGC_Raw", "bims")
-PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINED", "process", WORKFLOW_NAME)
+PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "process", WORKFLOW_NAME)
 
 # RESOURCES = os.path.join(ROOT, RESOURCES_DATA_FOLDER)
 # SCRIPTS = os.path.join(ROOT, SCRIPTS_DATA_FOLDER)
@@ -46,6 +46,156 @@ rule all:
     the final files im attempting to get out of the workflow."""
     input:
         os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+
+
+# rule eigenstrat:
+     """ Using eigenstrat calculate the first 10 PC's.
+
+    https://www.hsph.harvard.edu/alkes-price/eigensoft-frequently-asked-questions/
+    however, you can set “familynames: NO” so that only the sample ID name will be used and 
+    must meet the 39 character limit.
+    """
+#     input:
+#     output:
+#     shell:
+#         "module load eigensoft/4.2; \
+#         smartpca.perl -i data/adgc.pruned.3unrelated.shortids.bed \
+#         -a data/adgc.pruned.3unrelated.shortids.bim  \
+#         -b data/adgc.pruned.3unrelated.shortids.fam  \
+#         -o adgc.pruned.3unrelated.pca  \
+#         -p adgc.pruned.3unrelated.plot \
+#         -e adgc.pruned.3unrelated.eval  \
+#         -l adgc.pruned.3unrelated.log   \
+#         -m 0 -k 10"
+
+# rule eigenstrat:
+     """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
+     Create update-ids file using awk, file usingUse plink update-ids command with format:
+
+     old_ID1    old_ID2 new_ID1 new_ID2
+    """
+#     input:
+        # fam=
+#     output:
+        # short_id_fam=
+#     shell:
+        "awk '{{print $1,$2,"ID1_"NR,"ID2_"NR}}' adgc.pruned.3unrelated.fam; \
+        plink --fam {input.fam} --update-ids update_long_ids.txt --make-just-fam {output.short_id_fam}"
+
+# rule king_robust:
+#     """ Run King Robust with 3rd degree relative cutoff
+#     Cutoff value to distinguish between PO and FS is set at IBS0=0.0065
+#     Relationship summary (total relatives: 0 by pedigree, 3514 by inference)
+#       Source        MZ      PO      FS      2nd     3rd     OTHER
+#       ===========================================================
+#       Inference     1801    166     898     395     254     0
+
+#     Families are clustered into 641 new families
+#     A list of 28730 unrelated individuals saved in file adgc_unrelated_3_newtryunrelated.txt
+
+#     """
+#     input:
+#         plink_files=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps")
+#     output:
+#     shell:
+
+
+"""
+Skipping web check... [ --noweb ]
+Writing this text to log file [ adgc.combined.commonsnps.thinned.log ]
+Analysis started: Fri Jun 27 10:49:03 2014
+
+Options in effect:
+        --noweb
+        --bfile adgc_combined_common_snps
+        --maf 0.01
+        --geno 0.02
+        --indep-pairwise 1500 150 0.2
+        --out adgc.combined.commonsnps.thinned
+
+** For gPLINK compatibility, do not use '.' in --out **
+Reading map (extended format) from [ adgc_combined_common_snps.bim ]
+17146 markers to be included from [ adgc_combined_common_snps.bim ]
+Reading pedigree information from [ adgc_combined_common_snps.fam ]
+37635 individuals read from [ adgc_combined_common_snps.fam ]
+33351 individuals with nonmissing phenotypes
+Assuming a disease phenotype (1=unaff, 2=aff, 0=miss)
+Missing phenotype value is also -9
+16175 cases, 17176 controls and 4284 missing
+15617 males, 22014 females, and 4 of unspecified sex
+Warning, found 4 individuals with ambiguous sex codes
+These individuals will be set to missing ( or use --allow-no-sex )
+Writing list of these individuals to [ adgc.combined.commonsnps.thinned.nosex ]
+Reading genotype bitfile from [ adgc_combined_common_snps.bed ]
+Detected that binary PED file is v1.00 SNP-major mode
+Before frequency and genotyping pruning, there are 17146 SNPs
+37635 founders and 0 non-founders found
+Total genotyping rate in remaining individuals is 0.998116
+368 SNPs failed missingness test ( GENO > 0.02 )
+0 SNPs failed frequency test ( MAF < 0.01 )
+After frequency and genotyping pruning, there are 16778 SNPs
+After filtering, 16175 cases, 17176 controls and 4284 missing
+After filtering, 15617 males, 22014 females, and 4 of unspecified sex
+
+Previous log output (for reference):
+PLINK v1.90a 64-bit (6 Feb 2014)
+7 arguments: --bfile all_combined --extract common_snps.txt --make-bed --out adgc_combined_common_snps
+Hostname: m7int01
+Working directory: /panfs/pan.fsl.byu.edu/scr/grp/fslg_KauweLab/ADGC1KG2014/merged
+Start time: Fri Jun 27 10:36:04 2014
+
+64478 MB RAM detected; reserving 32239 MB for main workspace.
+7412946 variants and 37635 people (15617 males, 22014 females, 4 ambiguous) loaded.
+Ambiguous sex IDs written to adgc_combined_common_snps.nosex.
+Using 1 thread (no multithreaded calculations invoked).
+16175 cases, 17176 controls, and 4284 missing phenotypes present.
+Calculating allele frequencies... done.
+Total genotyping rate is 0.998116.
+17146 variants and 37635 people pass filters and QC.
+--make-bed to adgc_combined_common_snps.bed + .bim + .fam... done.
+
+End time: Fri Jun 27 10:38:38 2014
+"""
+rule plink_final_prune:
+    """ Takes the prune.in file (maf, geno, indep filters) and creates the final plink set.
+    Uses plink 1.9
+    """
+    input:
+        common_snps_bfile=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps")
+    output:
+        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps")
+    shell:
+        "plink --bfile {input.common_snps_bfile} \
+        --extract {input.common_snps_bfile}.prune.in \
+        --make-bed --out {output.final_pruned_bfiles}"
+
+rule plink_common_snps:
+    """ Extracts subset of common SNP's from plink files and then immediately filters and prunes them.
+    Plink outputs a file called prune.in/prune.out as a result of the maf, geno, indep filters. Must do
+    another plink call to extract the prune.in variants.
+
+    Uses plink 1.9
+    """
+    input:
+        adgc_bed=
+        adgc_fam=
+        adgc_bim=
+        common_snps=os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+    output:
+        common_extracted=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps")
+    params:
+        maf=0.01,
+        geno=0.02,
+        indep_pairwise="1500 150 0.2"
+    shell:
+        "plink --bed {input.combined} \
+        --fam {input.fam} \
+        --bim {input.bim} \
+        --extract {input.common_snps} \
+        --maf {params.maf} \
+        --geno {params.geno} \
+        --indep-pairwise {params.indep_pairwise} \
+        --make-bed --out {output.common_extracted}"
 
 rule get_common_snps:
     """ Using a simple python script intersect all input files. Input files
