@@ -12,15 +12,15 @@
         "gid": "fslg_KauweLab"
     },
     "plink_common_snps": {
-        "time": "02:00:00",
+        "time": "10:00:00",
         "mem": "64000M"
     },
     "plink_final_prune": {
-        "time": "02:00:00",
+        "time": "10:00:00",
         "mem": "64000M"
     },
     "king_robust": {
-        "time": "02:00:00",
+        "time": "10:00:00",
         "mem": "64000M"
     },
     "eigenstrat": {

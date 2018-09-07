@@ -44,7 +44,7 @@ LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
 MERGE_BASE_DATASET = "adc1"
 # Explicity set rules to run locally. All others will run on cluster w/ defaults
 localrules: create_sample_file_from_fam_per_study, keep_one_sample_file
-DATASET_SKIP_LIST = ["UMVUMSSM"]
+DATASET_SKIP_LIST = []
 
 DATASETS = [name for name in os.listdir(ORIGINAL_DATA_SOURCE) if os.path.isdir(os.path.join(ORIGINAL_DATA_SOURCE, name)) and name not in DATASET_SKIP_LIST]
 print(DATASETS)
@@ -75,6 +75,7 @@ def qctools_combine_params(wildcards):
 
 def get_all_combined_sample_files(wildcards):
     return [os.path.join(POST_COMBINE_PREFIX, f"chr{chr}.sample") for chr in CHROMOSOME]
+
 #####################################################################
 
 rule all:
@@ -84,11 +85,35 @@ rule all:
     See https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html?highlight=target%20rule#targets
     """
     input:
-        expand(os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"), chr=CHROMOSOME)
+        os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced")
         # expand(os.path.join(FINAL_DATA_SOURCE, "plink", "chr{chr}_combined"), chr=CHROMOSOME)
 
 ############### Plink production #####################
+# Yay we are using plink now!
 
+
+rule convert_to_plink:
+    """ Convert filtered bgen to plink format. Must use plink2 as we are using
+    bgen format files."""
+    input:
+        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen"),
+        sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
+    output:
+        os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced")
+    shell:
+        "plink2 --bgen {input.combined_chr_bgen} \
+        --sample {input.sample_file} \
+        --make-bed \
+        --out {output}"
+
+rule cat_bgens:
+    """Concatenate all the bgens into one humongous combined.bgen, to be converted to one humongous plink format. """
+    input:
+        bgens=lambda wildcards: [os.path.join(POST_COMBINE_PREFIX, "maf_filtered", f"chr{chr}_maf_filtered.bgen") for chr in CHROMOSOME]
+    output:
+        concatenated_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen")
+    shell:
+        "cat-bgen -g {input.bgens} -og {output.concatenated_bgen}"
 
 ############### VCF production #####################
 # rule convert_vcf_to_dosage:
@@ -100,79 +125,47 @@ rule all:
 #     shell:
 #         ""
 
-# rule convert_to_plink:
-#     """ Convert filtered bgen to plink format"""
-#     input:
-#         combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "chr{chr}_combined.bgen"),
-#         sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
-#     output:
-#         os.path.join(FINAL_DATA_SOURCE, "plink", "chr{chr}_combined")
-#     shell:
-#         "plink --bgen {input.combined_chr_bgen} \
-#         --sample {input.sample_file} \
-#         --make-bed \
-#         --out {output}"
-
-# rule cat_bgens:
-#     """Concatenate all the bgens into one humongous combined.bgen, to be converted to plink format. """
-#     input:
-#         bgens=lambda wildcards: [os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen") for chr in CHROMOSOME]
-#     output:
-#         concatenated_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen")
-#     shell:
-#         "cat-bgen -g {input.bgens} -og {output.concatenated_bgen}"
-
 # rule add_maf_to_vcf:
 #     input:
+#         os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
 #     output:
+#         os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed_with_maf.vcf.gz")
 #     shell:
 #         "export BCFTOOLS_PLUGINS=/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/bcftools-1.8/plugins/; \
 #         bcftools +fill-tags {input} -- -t AF > {output}"
 
-rule process_vcf:
-    """ Fix the crappy vcf that comes out of qctools, annotate it with rs#, strip ridiculous ",chr"
-    """
-    input:
-        vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"),
-        dbsnp_ref=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt")
-    output:
-        out_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
-    run:
-        utils.rs_annotate(input.vcf, input.dbsnp_ref, wildcards.chr, output.out_vcf)
+# rule process_vcf:
+#     """ Fix the crappy vcf that comes out of qctools, annotate it with rs#, strip ridiculous ",chr"
+#     """
+#     input:
+#         vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"),
+#         dbsnp_ref=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt")
+#     output:
+#         out_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
+#     run:
+#         utils.rs_annotate(input.vcf, input.dbsnp_ref, wildcards.chr, output.out_vcf)
 
-rule convert_to_vcf:
-    """ Simply convert to vcf using qctools. Produces a vcf with GP and """
-    input:
-        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen"),
-        sample_file=os.path.join(POST_COMBINE_PREFIX, "vcf", "uniq_id_combined.sample")
-    output:
-        vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
-    log:
-        os.path.join(POST_COMBINE_PREFIX, "filters", "chr{chr}_filter_maf_qctools.log")
-    params:
-        threshold=0.5001 # Lowest threshold QCtools allows.
-    shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
-            -g {input.combined_chr_bgen} \
-            -s {input.sample_file} \
-            --threshold {params.threshold} \
-            --assume-chromosome {wildcards.chr} \
-            -og {output.vcf} \
-            -log {log}"
+# rule convert_to_vcf:
+#     """ Simply convert to vcf using qctools. Produces a vcf with GP and """
+#     input:
+#         combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen"),
+#         sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
+#     output:
+#         vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
+#     log:
+#         os.path.join(LOGS, "qctools_convert_vcf", "chr{chr}_vcf_convert.log")
+#     params:
+#         threshold=0.5001 # Lowest threshold QCtools allows.
+#     shell:
+#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
+#             -g {input.combined_chr_bgen} \
+#             -s {input.sample_file} \
+#             -threshold {params.threshold} \
+#             -assume-chromosome {wildcards.chr} \
+#             -og {output.vcf} \
+#             -log {log}"
 
-rule create_sample_file_for_vcf:
-    """ Must concatenate the ID_1 and ID_2 in order to have a unique ID for
-    every sample in the vcf file.
-    """
-    input:
-        sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
-    output:
-        vcf_sample_file=os.path.join(POST_COMBINE_PREFIX, "vcf", "uniq_id_combined.sample")
-    shell:
-        "head -n 2 {input.sample_file} > {output.vcf_sample_file}; "
-        "awk 'FNR > 2 {{print $1___$2, $2, $3, $4, $5}}' {input.sample_file} >> {output.vcf_sample_file}"
-
-############### MAF filter Combined Dataset #####################
+############### MAF filter Combined Dataset #####################    
 rule filter_low_maf_variants:
     """ Remove low MAF SNPs. Use assume-chromosome to get the vcf chromosome
     column to properly populate"""
@@ -180,9 +173,9 @@ rule filter_low_maf_variants:
         combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "chr{chr}_combined.bgen"),
         low_maf_snps=os.path.join(POST_COMBINE_PREFIX, "filters", "chr{chr}_maf_filter.txt"),
     output:
-        filtered_vcf=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen")
+        filtered_vcf=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.gen.gz")
     log:
-        os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "qctools", "chr{chr}_filter_maf_qctools.log")
+        os.path.join(LOGS, "qctools_merged_snp_stats", "chr{chr}_filter_maf_qctools.log")
     shell:
         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.combined_chr_bgen} \
@@ -265,7 +258,7 @@ rule qctools_combine_variants:
         combined_chr_gen=os.path.join(POST_COMBINE_PREFIX, "chr{chr}_combined.bgen"),
         combined_chr_sample=temp(os.path.join(POST_COMBINE_PREFIX, "chr{chr}.sample"))
     log:
-        os.path.join(LOGS, "post_combine", "qctools_combine_variants", "chr{chr}_qctool.log")
+        os.path.join(LOGS, "qctools_combine_variants", "chr{chr}_qctool.log")
     threads: 8
     params:
         combine_chrom_param=qctools_combine_params
@@ -286,20 +279,19 @@ rule filter_low_info_dup_variants:
     these bgens will be messed when trying to convert to plink."""
     input:
         gen_file=os.path.join(ORIGINAL_DATA_SOURCE, "{ds}", "chr{chr}.gen.gz"),
-        filter_variants=lambda wildcards: os.path.join(PRE_COMBINE_PREFIX, f"{wildcards.ds}", "filters", f"{wildcards.ds.lower()}_info_dup_filter.txt")
+        filter_variants=lambda wildcards: os.path.join(PRE_COMBINE_PREFIX, f"{wildcards.ds}", "filters", f"{wildcards.ds.lower()}_info_filter.txt")
     output:
         filtered_gen=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.bgen")
     log:
-        os.path.join(LOGS, "filter_lowinfo", "pre_combine", "{ds}", "chr{chr}_qctools.log")
+        os.path.join(LOGS, "filter_lowinfo", "{ds}", "chr{chr}_qctools.log")
     threads: 4
     shell:
         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
             -g {input.gen_file} \
-            -og {output.filtered_gen} \
             -assume-chromosome {wildcards.chr} \
             -excl-variants {input.filter_variants} \
-            -threads {threads} \
-            -log {log}"
+            -log {log} \
+            -og {output.filtered_gen}"
 
 rule write_dup_and_low_info_variants:
     """ This rule writes a single variant filter file to be used by qctools.
@@ -319,7 +311,7 @@ rule write_dup_and_low_info_variants:
         info_file=os.path.join(ORIGINAL_DATA_SOURCE, "{ds}", "{ds_lower}_info.txt"),
         gnomad_ref_data=os.path.join(RESOURCES, "gnomad", "gnomad_exomes_af_snps_only.txt")
     output:
-        filter_variant_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "filters", "{ds_lower}_info_dup_filter.txt"),
+        filter_variant_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "filters", "{ds_lower}_info_filter.txt"),
         dups_file=os.path.join(AUXILLIARY_FOLDER, "duplicates", "{ds}_{ds_lower}_dups.txt")
     params:
         low_filter_threshold=".3"
@@ -334,7 +326,6 @@ rule create_sample_file_from_fam_per_study:
         os.path.join(PRE_COMBINE_PREFIX, "{ds}", "{ds_lower}.sample")
     run:
         utils.sample_from_fam(input, output)
-
 
 # rule write_low_info_snps_per_study:
 #     """ Write low info snp to file.

@@ -27,15 +27,20 @@ from pathlib import Path
 # This is the shared folder location, however due to lack of space cant be used.
 # ROOT = "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/"
 ROOT = "/fslhome/fslcollab192/compute"
+WORKING_DIR = "ADGC_HRC_COMBINE_BKUP"
 WORKFLOW_NAME = "relatedness_workflow"
 # RESOURCES_DATA_FOLDER = "resources"
 # SCRIPTS_DATA_FOLDER = "scripts/python_scripts"
 BIM_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data", "ADGC_Raw", "bims")
-PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "process", WORKFLOW_NAME)
+PROCESS_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "process", WORKFLOW_NAME)
+
+FINAL_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "final")
+AUX_DATA = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 
 # RESOURCES = os.path.join(ROOT, RESOURCES_DATA_FOLDER)
 # SCRIPTS = os.path.join(ROOT, SCRIPTS_DATA_FOLDER)
 LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
+PLINK_EXT = ["bed", "bim", "fam"]
 
 localrules: bim_to_snp_ids_only, get_common_snps
 
@@ -45,16 +50,16 @@ rule all:
     """ This is an artificial snakemake rule that basically specifies as input
     the final files im attempting to get out of the workflow."""
     input:
-        os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+        expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
 
 
 # rule eigenstrat:
-     """ Using eigenstrat calculate the first 10 PC's.
-
-    https://www.hsph.harvard.edu/alkes-price/eigensoft-frequently-asked-questions/
-    however, you can set “familynames: NO” so that only the sample ID name will be used and 
-    must meet the 39 character limit.
-    """
+    #  """ Using eigenstrat calculate the first 10 PC's.
+    #
+    # https://www.hsph.harvard.edu/alkes-price/eigensoft-frequently-asked-questions/
+    # however, you can set “familynames: NO” so that only the sample ID name will be used and
+    # must meet the 39 character limit.
+    # """
 #     input:
 #     output:
 #     shell:
@@ -69,18 +74,17 @@ rule all:
 #         -m 0 -k 10"
 
 # rule eigenstrat:
-     """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
-     Create update-ids file using awk, file usingUse plink update-ids command with format:
-
-     old_ID1    old_ID2 new_ID1 new_ID2
-    """
+# """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
+# Create update-ids file using awk, file usingUse plink update-ids command with format:
+# old_ID1    old_ID2 new_ID1 new_ID2
+# """
 #     input:
         # fam=
 #     output:
         # short_id_fam=
 #     shell:
-        "awk '{{print $1,$2,"ID1_"NR,"ID2_"NR}}' adgc.pruned.3unrelated.fam; \
-        plink --fam {input.fam} --update-ids update_long_ids.txt --make-just-fam {output.short_id_fam}"
+        # "awk '{{print $1,$2,"ID1_"NR,"ID2_"NR}}' adgc.pruned.3unrelated.fam; \
+        # plink --fam {input.fam} --update-ids update_long_ids.txt --make-just-fam {output.short_id_fam}"
 
 # rule king_robust:
 #     """ Run King Robust with 3rd degree relative cutoff
@@ -161,13 +165,15 @@ rule plink_final_prune:
     Uses plink 1.9
     """
     input:
-        common_snps_bfile=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps")
+        common_snps_bfile=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps.{ext}"), ext=PLINK_EXT)
     output:
-        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps")
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+    params:
+        plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps")
     shell:
         "plink --bfile {input.common_snps_bfile} \
         --extract {input.common_snps_bfile}.prune.in \
-        --make-bed --out {output.final_pruned_bfiles}"
+        --make-bed --out {params.plink_base}"
 
 rule plink_common_snps:
     """ Extracts subset of common SNP's from plink files and then immediately filters and prunes them.
@@ -177,25 +183,26 @@ rule plink_common_snps:
     Uses plink 1.9
     """
     input:
-        adgc_bed=
-        adgc_fam=
-        adgc_bim=
-        common_snps=os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+        bed=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.bed"),
+        fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        bim=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.bim"),
+        common_snps=os.path.join(AUX_DATA, "adgc_hrc_common_snps.txt")
     output:
-        common_extracted=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps")
+        common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps.{ext}"), ext=PLINK_EXT)
     params:
+        plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps"),
         maf=0.01,
         geno=0.02,
         indep_pairwise="1500 150 0.2"
     shell:
-        "plink --bed {input.combined} \
+        "plink --bed  {input.bed} \
         --fam {input.fam} \
         --bim {input.bim} \
         --extract {input.common_snps} \
         --maf {params.maf} \
         --geno {params.geno} \
         --indep-pairwise {params.indep_pairwise} \
-        --make-bed --out {output.common_extracted}"
+        --make-bed --out {params.plink_base}"
 
 rule get_common_snps:
     """ Using a simple python script intersect all input files. Input files
@@ -204,7 +211,7 @@ rule get_common_snps:
         # snps=expand(os.path.join(PROCESS_DATA_SOURCE, "bim_snps", "{study}.bim"), study=wildcards.study) # Would love to be able to do this..
         snps=lambda wildcards: [os.path.join(PROCESS_DATA_SOURCE, "bim_snps", "{}.bim".format(bim)) for bim in BIM_NAMES]
     output:
-        common_snps=os.path.join(PROCESS_DATA_SOURCE, "common_snps.txt")
+        common_snps=os.path.join(AUX_DATA, "adgc_hrc_common_snps.txt")
     run:
         setlist = []
         for file in input:

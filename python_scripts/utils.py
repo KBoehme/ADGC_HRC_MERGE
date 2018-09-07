@@ -7,51 +7,56 @@ def get_mem(wildcards):
     print(wildcards)
     return int(get_size_mb('output.dat')*10)
 
-def rs_annotate(input_vcf, rs_reference, chrom, output):
+def rs_annotate(input_vcf, rs_reference, chromNum, output):
     import gzip
 
-    outputfile = gzip.open(output, 'w')
-
+    outputfile = gzip.open(output, 'wt')
+    chromNum = str(chromNum)
     #read the refile into a dictionary
     rsRefs = {}
-    prevPos = ''
-    thisPos = ''
-    chromNum = ''
-    with gzip.open(rs_reference, 'r') as openRef:
+    with gzip.open(rs_reference, 'rt') as openRef:
         for line in openRef:
-            line = line.decode('utf-8')
+            line = line
             words = line.split()
-            chromNum = words[0]
-            thisPos = words[1]
-            if thisPos == prevPos:
-                rsRefs[words[1]].update({(words[3] + words[4]):words[2]})
-            else:
-                rsRefs[words[1]] = {(words[3] + words[4]):words[2]}
-            prevPos = thisPos
+            chrom = words[0]
+            pos = words[1]
+            rsid = words[2]
+            ref = words[3]
+            alt = words[4]
+            rsRefs[f"{chrom}+{pos}+{ref}+{alt}"] = rsid
 
     #open the vcf to be annotated and output into the open outputfile
-    CHUNK = 10000
-    with gzip.open(input_vcf, 'r') as openfile:
+    CHUNK = 1000
+    print("start parsing input vcf")
+    with gzip.open(input_vcf, 'rt') as openfile:
+        write_chunk = []
         for i, line in enumerate(openfile):
-            line = line.decode('utf-8')
-            if i % CHUNK == 0:
+            line = line
+            if i != 0 and i % CHUNK == 0:
                 print("Working on line number: {}".format(i))
-            wrds = line.split()
-            if wrds[0][0] != '#':
-                val = rsRefs.get(wrds[1], None)
-                position = line.find(wrds[2])
-                if val is not None:
-                    val2 = val.get((wrds[3] + wrds[4]), None)
-                    if val2 is not None:
-                        line = line[0:position] + val2 + line[(position + len(wrds[2])):len(line)]
-                    else:
-                        line = line[0:position] + wrds[2][0:wrds[2].find(',')] + line[(position + len(wrds[2])):len(line)]
-                else:
-                    line = line[0:position] + wrds[2][0:wrds[2].find(',')] + line[(position + len(wrds[2])):len(line)]
-                line = chromNum + line[(line.find(wrds[0]) + len(wrds[0])):len(line)]
-            outputfile.write(line.encode())
-            if i == 0:
-                outputfile.write("##contig=<ID={}>\n".format(chrom).encode())
+                if write_chunk is not None:
+                    outputfile.writelines(write_chunk)
+                    write_chunk = []
+            if not line.startswith('#'):
+                sline = line.split()
+                chrom = sline[0]
+                pos = sline[1]
+                id = sline[2]
+                ref = sline[3]
+                alt = sline[4]
+                key = f"{chrom}+{pos}+{ref}+{alt}"
+                new_id = rsRefs.get(key, id.replace(f",{chromNum}", ""))
+                outline = [chromNum, pos]
+                outline.append(new_id)
+                outline.extend(sline[3:]) # Add the rest of the line unchanged
+                outline += "\n"
+                write_chunk.append("\t".join(outline))
+            else:
+                write_chunk.append(line)
+                if i == 0:
+                    write_chunk.append(f"##contig=<ID={chromNum}>\n")
+        if write_chunk:
+            outputfile.writelines(write_chunk)
     outputfile.close()
 
 

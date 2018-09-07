@@ -48,7 +48,7 @@ def write_low_info_and_dups_filter_file(info_file, gnomad_af_file, low_info_thre
             maf = float(sline[4])
             # Found one with -
             if sline[6] == "-" or float(sline[6]) < float(low_info_threshold):
-                out_line = [chrom_pos, chrom_pos, chr, pos, ref, alt]
+                out_line = [chr, chrom_pos, chr, pos, ref, alt]
                 # print("Writing low info variant: {}".format(' '.join(out_line)))
                 outfile.write(" ".join(out_line)+"\n")
             else:
