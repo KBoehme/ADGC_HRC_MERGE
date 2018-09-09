@@ -85,7 +85,8 @@ rule all:
     See https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html?highlight=target%20rule#targets
     """
     input:
-        os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced")
+        expand(os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz"), chr=CHROMOSOME)
+        # expand(os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"), ds=DATASETS, chr=CHROMOSOME)
         # expand(os.path.join(FINAL_DATA_SOURCE, "plink", "chr{chr}_combined"), chr=CHROMOSOME)
 
 ############### Plink production #####################
@@ -165,7 +166,18 @@ rule cat_bgens:
 #             -og {output.vcf} \
 #             -log {log}"
 
-############### MAF filter Combined Dataset #####################    
+############### MAF filter Combined Dataset #####################
+rule update_rsid_gen_file:
+    """ Update rsid to real one if available, otherwise use fill chr:pos:A1:A2
+    """
+    input:
+        gen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.gen.gz"),
+        dbsnp_ref=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt.gz")
+    output:
+        out_gen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz")
+    run:
+        utils.rs_update_gen(input.vcf, input.dbsnp_ref, output.out_gen)
+
 rule filter_low_maf_variants:
     """ Remove low MAF SNPs. Use assume-chromosome to get the vcf chromosome
     column to properly populate"""
@@ -273,6 +285,49 @@ rule qctools_combine_variants:
             -threads {threads}"
 
 ############### Pre combine Datasets #####################
+# rule update_variant_ids:
+#     """ Remove low info snps. Takes low input filter snps and sample file.
+#     IMPORTANT: This uses assume chromosome when converting to bgen, otherwise
+#     these bgens will be messed when trying to convert to plink."""
+#     input:
+#         gen_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"),
+#         update_map=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "update", "chr{chr}_update_map.txt")
+#     output:
+#         updated_gen=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered_updated.bgen")
+#     log:
+#         os.path.join(LOGS, "update_variants", "{ds}", "chr{chr}_qctools.log")
+#     shell:
+#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
+#             -g {input.gen_file} \
+#             -map-id-data {input.update_map} \
+#             -compare-variants-by snpid \
+#             -log {log} \
+#             -og {output.updated_gen}"
+
+# rule create_update_variant_files:
+#     """ Create the update variant id files
+#     22 22:16050435 16050435 T C 0.999
+#
+#      $ qctool -g <input file(s)> -og output.bgen -map-id-data <map file> [+other options]
+#     for example, this might be useful when updating files to match a new genome build.
+#
+#     The "map" file given to -map-id-data must be a text file with twelve named
+#     columns, in the following order: the current SNPID, rsid, chromosome,
+#     position, first and second alleles, followed by the desired updated
+#     SNPID, rsid, chromosome, position and alleles. The first line is
+#     treated as column names (currently it doesn't matter what these
+#     are called.) Variants not in this file are not affected by the
+#     mapping, and will be output unchanged.
+#     """
+#     input:
+#         gen_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"),
+#         ref_file=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt.gz")
+#     output:
+#         update_map=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "update", "chr{chr}_update_map.txt")
+#     run:
+#         utils.create_update_map(input.gen_file, input.ref_file, output.update_map)
+
+
 rule filter_low_info_dup_variants:
     """ Remove low info snps. Takes low input filter snps and sample file.
     IMPORTANT: This uses assume chromosome when converting to bgen, otherwise

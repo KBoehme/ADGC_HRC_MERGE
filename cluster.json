@@ -24,12 +24,12 @@
     "qctools_combine_variants":
     {
         "time": "40:00:00",
-        "mem": "40000M"
+        "mem": "64000M"
     },
     "generate_snp_statistics":
     {
         "time": "08:00:00",
-        "mem": "10000M"
+        "mem": "30000M"
     },
     "write_low_maf_snps_per_chromosome":
     {
@@ -38,8 +38,8 @@
     },
     "filter_low_maf_variants":
     {
-        "time": "50:00:00",
-        "mem": "60000M"
+        "time": " mn ",
+        "mem": "64000M"
     },
     "convert_to_vcf":
     {
@@ -55,5 +55,10 @@
     {
         "time": "40:00:00",
         "mem": "50000M"
+    },
+    "update_variant_ids":
+    {
+        "time": "10:00:00",
+        "mem": "30000M"
     }
 }

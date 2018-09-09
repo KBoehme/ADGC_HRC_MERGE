@@ -1,4 +1,5 @@
 """ Collection of utility scripts"""
+import gzip
 
 def get_size_file_mb(filename):
     return int(os.path.getsize(filename)/(1024*1024))
@@ -7,12 +8,8 @@ def get_mem(wildcards):
     print(wildcards)
     return int(get_size_mb('output.dat')*10)
 
-def rs_annotate(input_vcf, rs_reference, chromNum, output):
-    import gzip
 
-    outputfile = gzip.open(output, 'wt')
-    chromNum = str(chromNum)
-    #read the refile into a dictionary
+def read_ref_file(rs_reference):
     rsRefs = {}
     with gzip.open(rs_reference, 'rt') as openRef:
         for line in openRef:
@@ -24,6 +21,85 @@ def rs_annotate(input_vcf, rs_reference, chromNum, output):
             ref = words[3]
             alt = words[4]
             rsRefs[f"{chrom}+{pos}+{ref}+{alt}"] = rsid
+    print("Done reading ref file")
+    return rsRefs
+
+def create_update_map(gen_file, ref_file, update_map):
+    """ Creates 12 column variant id map updater for qctools"""
+    gen_file = gen_file
+    ref_file = ref_file
+    out_file = update_map
+
+    rs_ref = read_ref_file(ref_file)
+    with gzip.open(gen_file, 'rt') as openfile, open(out_file, 'w') as out:
+        out.write("SNPID rsid chromosome position a1 a2 new_SNPID new_rsid new_chrom new_pos new_a1 new_a2\n")
+        for line in openfile:
+            sline = line.split()
+            SNPID, rsid, chromosome, position, a1, a2 = sline[:6]
+            outline = []
+            outline.extend(sline[:6])
+            #22 22 22:16050435 16050435 T C 0.999
+            #22 22 rs544901529 16352459 C T
+            key = f"{SNPID}+{position}+{a1}+{a2}"
+            new_id = rs_ref.get(key, None)
+            if new_id is not None:
+                outline.extend([SNPID, new_id, chromosome.split(":")[0], position, a1, a2])
+                if len(outline) != 12:
+                    sys.exit("Failing outline not equal to 12.")
+                out.write(' '.join(outline)+"\n")
+
+def rs_update_gen(gen_file, ref_file, output):
+    """ Loop through gen_file and update rsid column to real rsid.
+
+    SNP ID, RS ID of the SNP, base-pair position of the SNP, the allele coded A and the allele coded B
+    22      22                  22:17060707 17060707 G A
+
+     """
+    import gzip
+
+    outputfile = gzip.open(output, 'wt')
+    #read the refile into a dictionary
+    rsRefs = read_ref_file(ref_file)
+
+    #open the vcf to be annotated and output into the open outputfile
+    CHUNK = 1000
+    print("Start parsing input gen")
+    with gzip.open(gen_file, 'rt') as openfile:
+        write_chunk = []
+        for i, line in enumerate(openfile):
+            line = line
+            if i != 0 and i % CHUNK == 0:
+                print("Working on line number: {}".format(i))
+                if write_chunk is not None:
+                    outputfile.writelines(write_chunk)
+                    write_chunk = []
+            sline = line.split()
+            chrom = sline[0]
+            rsid_chrom = sline[1]
+            chrom_pos = sline[2]
+            pos = sline[3]
+            ref = sline[4]
+            alt = sline[5]
+            key = f"{chrom}+{pos}+{ref}+{alt}"
+            # If we cant find an rsid, create a detailed variant id
+            detailed_variant_id = f"{chrom}:{pos}:{ref}:{alt}"
+            new_id = rsRefs.get(key, detailed_variant_id)
+            outline = [chrom, new_id, pos, ref, alt]
+            outline.extend(sline[6:]) # Add the rest of the line unchanged
+            write_chunk.append(" ".join(outline)+"\n")
+        if write_chunk:
+            outputfile.writelines(write_chunk)
+    outputfile.close()
+    print("Done writing output gen: {}".format(output))
+
+
+def rs_annotate(input_vcf, rs_reference, chromNum, output):
+    import gzip
+
+    outputfile = gzip.open(output, 'wt')
+    chromNum = str(chromNum)
+    #read the refile into a dictionary
+    rsRefs = read_ref_file(ref_file)
 
     #open the vcf to be annotated and output into the open outputfile
     CHUNK = 1000
