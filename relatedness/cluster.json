@@ -11,20 +11,24 @@
         "mail-type": "FAIL",
         "gid": "fslg_KauweLab"
     },
-    "plink_common_snps": {
-        "time": "10:00:00",
-        "mem": "64000M"
+    "plink_extract_common_snps_and_filter": {
+        "time": "01:00:00",
+        "mem": "50000M"
     },
     "plink_final_prune": {
-        "time": "10:00:00",
-        "mem": "64000M"
+        "time": "00:30:00",
+        "mem": "20000M"
+    },
+    "remap_fids_for_king": {
+        "time": "01:00:00",
+        "mem": "20000M"
     },
     "king_robust": {
         "time": "10:00:00",
-        "mem": "64000M"
+        "mem": "30000M"
     },
     "eigenstrat": {
         "time": "30:00:00",
-        "mem": "100000M"
+        "mem": "40000M"
     }
 }

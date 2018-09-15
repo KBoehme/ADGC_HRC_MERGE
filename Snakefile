@@ -34,7 +34,7 @@ PRE_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "pre_combine")
 POST_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "post_combine")
 
 FINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "final")
-AUXILLIARY_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxilliary")
+EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 
 RESOURCES = os.path.join(ROOT, "resources")
 SCRIPTS = os.path.join(ROOT, "scripts", "python_scripts")
@@ -45,6 +45,7 @@ MERGE_BASE_DATASET = "adc1"
 # Explicity set rules to run locally. All others will run on cluster w/ defaults
 localrules: create_sample_file_from_fam_per_study, keep_one_sample_file
 DATASET_SKIP_LIST = []
+PLINK_EXT = ["bed", "bim", "fam"]
 
 DATASETS = [name for name in os.listdir(ORIGINAL_DATA_SOURCE) if os.path.isdir(os.path.join(ORIGINAL_DATA_SOURCE, name)) and name not in DATASET_SKIP_LIST]
 print(DATASETS)
@@ -85,8 +86,9 @@ rule all:
     See https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html?highlight=target%20rule#targets
     """
     input:
-        expand(os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz"), chr=CHROMOSOME)
-        # expand(os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"), ds=DATASETS, chr=CHROMOSOME)
+        expand(os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.{ext}"), ext=PLINK_EXT),
+        expand(os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"), chr=CHROMOSOME)
+        # expand(os.path.join(PRE_COMBINE_PREFIX, "{ds    "chr{chr}_filtered.gen.gz"), ds=DATASETS, chr=CHROMOSOME)
         # expand(os.path.join(FINAL_DATA_SOURCE, "plink", "chr{chr}_combined"), chr=CHROMOSOME)
 
 ############### Plink production #####################
@@ -97,43 +99,45 @@ rule convert_to_plink:
     """ Convert filtered bgen to plink format. Must use plink2 as we are using
     bgen format files."""
     input:
-        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen"),
+        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "plink_prep", "adgc_hrc_all_combined.bgen"),
         sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
     output:
-        os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced")
+        expand(os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.{ext}"), ext=PLINK_EXT)
+    params:
+        plink_base=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced")
     shell:
         "plink2 --bgen {input.combined_chr_bgen} \
         --sample {input.sample_file} \
         --make-bed \
-        --out {output}"
+        --out {params.plink_base}"
 
 rule cat_bgens:
     """Concatenate all the bgens into one humongous combined.bgen, to be converted to one humongous plink format. """
     input:
-        bgens=lambda wildcards: [os.path.join(POST_COMBINE_PREFIX, "maf_filtered", f"chr{chr}_maf_filtered.bgen") for chr in CHROMOSOME]
+        gens=lambda wildcards: [os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "bgen", f"chr{chr}_maf_filtered_rsid_updated.bgen") for chr in CHROMOSOME]
     output:
-        concatenated_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "adgc_hrc_all_combined.bgen")
+        concatenated_gen=os.path.join(POST_COMBINE_PREFIX, "plink_prep", "adgc_hrc_all_combined.bgen")
     shell:
-        "cat-bgen -g {input.bgens} -og {output.concatenated_bgen}"
+        "cat-bgen -g {input.gens} -og {output.concatenated_gen}"
 
 ############### VCF production #####################
-# rule convert_vcf_to_dosage:
-#     """Using convert vcf with GP (genotype probabilities) to dosage vcfs."""
-#     input:
-#         filtered_vcf=os.path.join(PROCESS_DATA_SOURCE, "COMBINED/vcf/chr{chr}_maf_filtered.vcf")
-#     output:
-#         filtered_vcf=os.path.join(PROCESS_DATA_SOURCE, "COMBINED/vcf_dosages/chr{chr}.vcf")
-#     shell:
-#         ""
+rule convert_vcf_to_dosage:
+    """Using convert vcf with GP (genotype probabilities) to dosage vcfs."""
+    input:
+        filtered_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_with_af.vcf.gz")
+    output:
+        dosage_vcf=os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz")
+    run:
+        utils.dosage(input.filtered_vcf, output.dosage_vcf)
 
-# rule add_maf_to_vcf:
-#     input:
-#         os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
-#     output:
-#         os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed_with_maf.vcf.gz")
-#     shell:
-#         "export BCFTOOLS_PLUGINS=/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/bcftools-1.8/plugins/; \
-#         bcftools +fill-tags {input} -- -t AF > {output}"
+rule add_maf_to_vcf:
+    input:
+        os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
+    output:
+        os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_with_af.vcf.gz")
+    shell:
+        "export BCFTOOLS_PLUGINS=/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/bcftools-1.8/plugins/; \
+        bcftools +fill-tags {input} -- -t AF > {output}"
 
 # rule process_vcf:
 #     """ Fix the crappy vcf that comes out of qctools, annotate it with rs#, strip ridiculous ",chr"
@@ -146,27 +150,42 @@ rule cat_bgens:
 #     run:
 #         utils.rs_annotate(input.vcf, input.dbsnp_ref, wildcards.chr, output.out_vcf)
 
-# rule convert_to_vcf:
-#     """ Simply convert to vcf using qctools. Produces a vcf with GP and """
-#     input:
-#         combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "chr{chr}_maf_filtered.bgen"),
-#         sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
-#     output:
-#         vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
-#     log:
-#         os.path.join(LOGS, "qctools_convert_vcf", "chr{chr}_vcf_convert.log")
-#     params:
-#         threshold=0.5001 # Lowest threshold QCtools allows.
-#     shell:
-#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
-#             -g {input.combined_chr_bgen} \
-#             -s {input.sample_file} \
-#             -threshold {params.threshold} \
-#             -assume-chromosome {wildcards.chr} \
-#             -og {output.vcf} \
-#             -log {log}"
+rule convert_to_vcf:
+    """ Simply convert to vcf using qctools. Produces a vcf with GP and """
+    input:
+        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz"),
+        sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
+    output:
+        vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
+    log:
+        os.path.join(LOGS, "qctools_convert_vcf", "chr{chr}_vcf_convert.log")
+    params:
+        threshold=0.5001 # Lowest threshold QCtools allows.
+    shell:
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
+            -g {input.combined_chr_bgen} \
+            -s {input.sample_file} \
+            -threshold {params.threshold} \
+            -assume-chromosome {wildcards.chr} \
+            -og {output.vcf} \
+            -log {log}"
 
 ############### MAF filter Combined Dataset #####################
+rule create_bgens:
+    """ Just create bgens."""
+    input:
+        combined_chr_gen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz")
+    output:
+        bgen=os.path.join(POST_COMBINE_PREFIX, "maf_filtered", "bgen", "chr{chr}_maf_filtered_rsid_updated.bgen")
+    log:
+        os.path.join(LOGS, "qctools_create_bgens", "chr{chr}.log")
+    shell:
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
+            -g {input.combined_chr_gen} \
+            -assume-chromosome {wildcards.chr} \
+            -og {output.bgen} \
+            -log {log}"
+
 rule update_rsid_gen_file:
     """ Update rsid to real one if available, otherwise use fill chr:pos:A1:A2
     """
@@ -176,7 +195,7 @@ rule update_rsid_gen_file:
     output:
         out_gen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz")
     run:
-        utils.rs_update_gen(input.vcf, input.dbsnp_ref, output.out_gen)
+        utils.rs_update_gen(input.gen, input.dbsnp_ref, output.out_gen)
 
 rule filter_low_maf_variants:
     """ Remove low MAF SNPs. Use assume-chromosome to get the vcf chromosome
@@ -367,7 +386,7 @@ rule write_dup_and_low_info_variants:
         gnomad_ref_data=os.path.join(RESOURCES, "gnomad", "gnomad_exomes_af_snps_only.txt")
     output:
         filter_variant_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "filters", "{ds_lower}_info_filter.txt"),
-        dups_file=os.path.join(AUXILLIARY_FOLDER, "duplicates", "{ds}_{ds_lower}_dups.txt")
+        dups_file=os.path.join(EXTRA_FOLDER, "duplicates", "{ds}_{ds_lower}_dups.txt")
     params:
         low_filter_threshold=".3"
     shell:

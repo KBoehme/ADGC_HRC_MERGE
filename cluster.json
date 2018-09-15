@@ -24,7 +24,7 @@
     "qctools_combine_variants":
     {
         "time": "40:00:00",
-        "mem": "64000M"
+        "mem": "60000M"
     },
     "generate_snp_statistics":
     {
@@ -38,13 +38,23 @@
     },
     "filter_low_maf_variants":
     {
-        "time": " mn ",
-        "mem": "64000M"
+        "time": "40:00:00",
+        "mem": "60000M"
+    },
+    "update_rsid_gen_file":
+    {
+        "time": "40:00:00",
+        "mem": "60000M"
     },
     "convert_to_vcf":
     {
         "time": "24:00:00",
         "mem": "50000M"
+    },
+    "create_bgens":
+    {
+        "time": "30:00:00",
+        "mem": "60000M"
     },
     "cat_bgens":
     {
@@ -60,5 +70,15 @@
     {
         "time": "10:00:00",
         "mem": "30000M"
+    },
+    "add_maf_to_vcf":
+    {
+        "time": "50:00:00",
+        "mem": "50000M"
+    },
+    "convert_vcf_to_dosage":
+    {
+        "time": "50:00:00",
+        "mem": "50000M"
     }
 }
