@@ -41,9 +41,10 @@ EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 # SCRIPTS = os.path.join(ROOT, SCRIPTS_DATA_FOLDER)
 LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
 PLINK_EXT = ["bed", "bim", "fam"]
-KING_EXT = ["allsegs.txt", "unrelated_toberemoved.txt", "unrelated.txt"]
+KING1_EXT = ["TMP.ped", "TMP.dat", "unrelated.txt", "updateids.txt"]
+KING2_EXT = ["allsegs.txt", "unrelated_toberemoved.txt", "unrelated.txt"]
 
-localrules: bim_to_snp_ids_only, get_common_snps, remap_fids_for_king
+localrules: bim_to_snp_ids_only, get_common_snps, remap_fids_for_king, copy_ld_pruned_common_snps_to_extra
 
 BIM_NAMES = [Path(name).stem for name in os.listdir(BIM_DATA_SOURCE)]
 
@@ -51,102 +52,172 @@ rule all:
     """ This is an artificial snakemake rule that basically specifies as input
     the final files im attempting to get out of the workflow."""
     input:
-        expand(os.path.join(PROCESS_DATA_SOURCE, "king", "adgc_hrc_king{ext}"), ext=KING_EXT)
+        os.path.join(EXTRA_FOLDER, "adgc_hrc_merged_common_snps.bim")
+        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par")
 
-# rule eigenstrat:
-    #  """ Using eigenstrat calculate the first 10 PC's.
-    #
-    # https://www.hsph.harvard.edu/alkes-price/eigensoft-frequently-asked-questions/
-    # however, you can set “familynames: NO” so that only the sample ID name will be used and
-    # must meet the 39 character limit.
-    # """
-#     input:
-#     output:
-#     shell:
-#         "module load eigensoft/4.2; \
-#         smartpca.perl -i data/adgc.pruned.3unrelated.shortids.bed \
-#         -a data/adgc.pruned.3unrelated.shortids.bim  \
-#         -b data/adgc.pruned.3unrelated.shortids.fam  \
-#         -o adgc.pruned.3unrelated.pca  \
-#         -p adgc.pruned.3unrelated.plot \
-#         -e adgc.pruned.3unrelated.eval  \
-#         -l adgc.pruned.3unrelated.log   \
-#         -m 0 -k 10"
-
-# rule eigenstrat:
-# """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
-# Create update-ids file using awk, file usingUse plink update-ids command with format:
-# old_ID1    old_ID2 new_ID1 new_ID2
-# """
-#     input:
-        # fam=
-#     output:
-        # short_id_fam=
-#     shell:
-        # "awk '{{print $1,$2,"ID1_"NR,"ID2_"NR}}' adgc.pruned.3unrelated.fam; \
-        # plink --fam {input.fam} --update-ids update_long_ids.txt --make-just-fam {output.short_id_fam}"
-
-rule king_robust:
-    """ Run King Robust with 3rd degree relative cutoff
-    Cutoff value to distinguish between PO and FS is set at IBS0=0.0065
-    Relationship summary (total relatives: 0 by pedigree, 3514 by inference)
-      Source        MZ      PO      FS      2nd     3rd     OTHER
-      ===========================================================
-      Inference     1801    166     898     395     254     0
-
-    Families are clustered into 641 new families
-    A list of 28730 unrelated individuals saved in file adgc_unrelated_3_newtryunrelated.txt
-
-      3 adgc_hrc_kingallsegs.txt
-   5178 adgc_hrc_kingunrelated_toberemoved.txt
-  33698 adgc_hrc_kingunrelated.txt
-
-    Notes on the program:
-        - Says LD pruning is not recommended. Seems to imply keep as many good
-        QC'ed variants as possible.
-
-    /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
+rule eigenstrat:
+    """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
+    04:30:00 runtime
     """
     input:
-        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "short_names", "adgc_short_names.bed")
+        bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bed"),
+        fam=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.fam"),
+        bim=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bim")
     output:
-        king_output=expand(os.path.join(PROCESS_DATA_SOURCE, "king", "adgc_hrc_king{ext}"), ext=KING_EXT)
+        pca=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par"),
+        eval=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.evec")
     params:
-        king_output_base=os.path.join(PROCESS_DATA_SOURCE, "king", "adgc_hrc_king"),
+        pca=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca"),
+        eval=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.eval"),
+        plot=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.plot"),
+        number_pca=10
+    log:
+        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.log")
+    shell:
+        "module load eigensoft/4.2; \
+        /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/EIG-7.2.1/bin/smartpca.perl \
+        -i {input.bed} -a {input.bim} \
+        -b {input.fam} -o {params.pca} \
+        -p {params.plot} -e {params.eval} \
+        -l {log} -m 0 -k {params.number_pca}"
+
+# Use rule if using King Robust to filter
+# rule prune_unrelated_short_ids:
+#     """ Take list of unrelated samples from previous steps and keep them, and
+#     renames samples for eigenstrat.
+#     1. Run plink to keep unrelated.
+#     2. Rename to shorter ID's
+#     """
+#     input:
+#         king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_kingunrelated.txt"),
+#         final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
+#     output:
+#         expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_pruned", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT)
+#     params:
+#         # fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
+#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
+#         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_pruned", "adgc_hrc_unrelated")
+#         # update_id_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_names", "short_name_update.txt")
+#     shell:
+#         "plink --bfile {params.input_plink_base} --keep {input.king_unrelated} --make-bed --out {params.output_plink_base}"
+#         # awk '{{print($1, $2, \"IID_\"NR, \"FID_\"NR)}}' {params.fam} > {params.update_id_file} && \
+#         # plink --bfile {params.input_plink_base} \
+#         # --update-ids {params.update_id_file} \
+#         # --make-bed --out {params.output_plink_base}"
+
+rule plink_rel_cutoff:
+    """ Just trying to do the rel cutoff using plink 1.9. Seems to get similiar
+    (few less) samples at the end. Save a step of using plink to extract a list
+    of unrelated samples
+    """
+    input:
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
+    output:
+        output=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.{ext}"), ext=PLINK_EXT)
+    params:
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
+        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink", "adgc_hrc_rel_cutoff"),
+        related_cutoff=0.125
+    shell:
+        "plink --bfile {params.input_plink_base} \
+        --rel-cutoff {params.related_cutoff} \
+        --make-bed --out {params.output_plink_base}"
+
+rule king_robust2:
+    """ Run KingRobust 2.1.5 with 3rd degree relative cutoff
+    """
+    input:
+        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.bed")
+    output:
+        king_output=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king2", "adgc_hrc_king{ext}"), ext=KING2_EXT)
+    params:
+        king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king2", "adgc_hrc_king"),
         related_cutoff=3
     shell:
         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5 \
         -b {input.final_pruned_bfiles} --unrelated \
-        --degree {params.related_cutoff} --plink \
+        --degree {params.related_cutoff} \
         --prefix {params.king_output_base}"
 
-rule remap_fids_for_king:
-    """ Update sample information
-        --update-ids [filename]
-        These update sample IDs, parental codes, and sexes, respectively. --update-parents now also updates founder/nonfounder status in the current run when appropriate.
-        --update-ids expects input with the following four fields:
-            Old family ID
-            Old within-family ID
-            New family ID
-            New within-family ID
+rule king_robust1:
+    """ Run KingRobust 1.4 with 3rd degree relative cutoff
+    /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
     """
     input:
-        expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.bed")
     output:
-        expand(os.path.join(PROCESS_DATA_SOURCE, "short_names", "adgc_short_names.{ext}"), ext=PLINK_EXT)
+        king_output=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_king{ext}"), ext=KING1_EXT)
     params:
-        fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
-        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps"),
-        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "short_names", "adgc_short_names"),
-        update_id_file=os.path.join(PROCESS_DATA_SOURCE, "short_names", "short_name_update.txt")
+        king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_king"),
+        related_cutoff=3
     shell:
-        "awk '{{print($1, $2, \"IID_\"NR, \"FID_\"NR)}}' {params.fam} > {params.update_id_file} && \
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
+        -b {input.final_pruned_bfiles} --unrelated \
+        --degree {params.related_cutoff} \
+        --prefix {params.king_output_base}"
+
+rule shorten_ids:
+    """ Take list of unrelated samples from previous steps and keep them, and
+    renames samples for eigenstrat.
+    1. Run plink to keep unrelated.
+    2. Rename to shorter ID's
+    """
+    input:
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+    output:
+        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
+    params:
+        input_fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps"),
+        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
+        update_id_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
+    shell:
+        "awk '{{print($1, $2, \"FID_\"NR, \"IID_\"NR)}}' {params.input_fam} > {params.update_id_file} && \
         plink --bfile {params.input_plink_base} \
         --update-ids {params.update_id_file} \
         --make-bed --out {params.output_plink_base}"
 
+# Tested this out to see if making all the same FID or all different FID's
+# changed anything. Decided to keep FID's the same.
+# rule remap_fids_for_king:
+#     """ Update sample information
+#         --update-ids [filename]
+#         These update sample IDs, parental codes, and sexes, respectively. --update-parents now also updates founder/nonfounder status in the current run when appropriate.
+#         --update-ids expects input with the following four fields:
+#             Old family ID
+#             Old within-family ID
+#             New family ID
+#             New within-family ID
+#
+#     "awk '{{print($1, $2, \"IID_\"NR, \"FID_\"NR)}}' {params.fam} > {params.update_id_file} && \
+#     """
+#     input:
+#         expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+#     output:
+#         expand(os.path.join(PROCESS_DATA_SOURCE, "short_names", "adgc_short_names.{ext}"), ext=PLINK_EXT)
+#     params:
+#         fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
+#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps"),
+#         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "short_names", "adgc_short_names"),
+#         update_id_file=os.path.join(PROCESS_DATA_SOURCE, "short_names", "short_name_update.txt")
+#     shell:
+#         "awk '{{print($1, $2, \"IID_\"NR, \"FID_\"NR)}}' {params.fam} > {params.update_id_file} && \
+#         plink --bfile {params.input_plink_base} \
+#         --update-ids {params.update_id_file} \
+#         --make-bed --out {params.output_plink_base}"
+
+rule copy_ld_pruned_common_snps_to_extra:
+    """ Simply copies the bim from previous step to final folder."""
+    input:
+        os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.bim")
+    output:
+        os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim")
+    shell:
+        "cp {input} {output}"
+
 rule plink_final_prune:
     """ Takes the prune.in file (maf, geno, indep filters) and creates the final plink set.
+    Upon reading the King documentation is suggests not LD-pruning.
     Uses plink 1.9
     Previously used following params
     Options in effect:

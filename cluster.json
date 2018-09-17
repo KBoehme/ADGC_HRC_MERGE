@@ -63,22 +63,22 @@
     },
     "convert_to_plink":
     {
-        "time": "40:00:00",
-        "mem": "50000M"
+        "time": "05:00:00",
+        "mem": "60000M"
     },
     "update_variant_ids":
     {
         "time": "10:00:00",
         "mem": "30000M"
     },
-    "add_maf_to_vcf":
+    "process_vcf":
     {
-        "time": "50:00:00",
-        "mem": "50000M"
+        "time": "60:00:00",
+        "mem": "30000M"
     },
-    "convert_vcf_to_dosage":
+    "tabix_vcf":
     {
-        "time": "50:00:00",
-        "mem": "50000M"
+        "time": "02:00:00",
+        "mem": "20000M"
     }
 }

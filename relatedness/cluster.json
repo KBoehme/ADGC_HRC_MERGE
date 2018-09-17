@@ -23,12 +23,24 @@
         "time": "01:00:00",
         "mem": "20000M"
     },
-    "king_robust": {
-        "time": "10:00:00",
+    "king_robust1": {
+        "time": "5:00:00",
+        "mem": "30000M"
+    },
+    "king_robust2": {
+        "time": "02:00:00",
+        "mem": "30000M"
+    },
+    "plink_rel_cutoff": {
+        "time": "05:00:00",
+        "mem": "30000M"
+    },
+    "prune_unrelated_shorted_ids": {
+        "time": "00:30:00",
         "mem": "30000M"
     },
     "eigenstrat": {
-        "time": "30:00:00",
+        "time": "08:00:00",
         "mem": "40000M"
     }
 }

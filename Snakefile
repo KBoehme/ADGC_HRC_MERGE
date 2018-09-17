@@ -86,15 +86,10 @@ rule all:
     See https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html?highlight=target%20rule#targets
     """
     input:
-        expand(os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.{ext}"), ext=PLINK_EXT),
-        expand(os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"), chr=CHROMOSOME)
-        # expand(os.path.join(PRE_COMBINE_PREFIX, "{ds    "chr{chr}_filtered.gen.gz"), ds=DATASETS, chr=CHROMOSOME)
-        # expand(os.path.join(FINAL_DATA_SOURCE, "plink", "chr{chr}_combined"), chr=CHROMOSOME)
+        expand(os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz.tbi"), chr=CHROMOSOME)
 
 ############### Plink production #####################
 # Yay we are using plink now!
-
-
 rule convert_to_plink:
     """ Convert filtered bgen to plink format. Must use plink2 as we are using
     bgen format files."""
@@ -121,39 +116,35 @@ rule cat_bgens:
         "cat-bgen -g {input.gens} -og {output.concatenated_gen}"
 
 ############### VCF production #####################
-rule convert_vcf_to_dosage:
-    """Using convert vcf with GP (genotype probabilities) to dosage vcfs."""
-    input:
-        filtered_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_with_af.vcf.gz")
-    output:
-        dosage_vcf=os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz")
-    run:
-        utils.dosage(input.filtered_vcf, output.dosage_vcf)
 
-rule add_maf_to_vcf:
+rule tabix_vcf:
+    """ tabix vcf files"""
     input:
-        os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
+        dosage_vcf=os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz")
     output:
-        os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_with_af.vcf.gz")
+        output_tbi=os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz.tbi")
+    shell:
+        "tabix -p vcf {input.dosage_vcf}"
+
+rule process_vcf:
+    """ Fix the crappy vcf that comes out of qctools, strip ridiculous ",chr"
+    from id, add AF, and contig header.
+    """
+    input:
+        vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"),
+    output:
+        out_vcf=os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz")
     shell:
         "export BCFTOOLS_PLUGINS=/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/bcftools-1.8/plugins/; \
-        bcftools +fill-tags {input} -- -t AF > {output}"
-
-# rule process_vcf:
-#     """ Fix the crappy vcf that comes out of qctools, annotate it with rs#, strip ridiculous ",chr"
-#     """
-#     input:
-#         vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz"),
-#         dbsnp_ref=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt")
-#     output:
-#         out_vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_fixed.vcf.gz")
-#     run:
-#         utils.rs_annotate(input.vcf, input.dbsnp_ref, wildcards.chr, output.out_vcf)
+        utils_script.py fix-vcf {input.vcf} {wildcards.chr} | \
+        bcftools +fill-tags -- -t AF | \
+        utils_script.py dosage | \
+        bgzip -c > {output.out_vcf}"
 
 rule convert_to_vcf:
     """ Simply convert to vcf using qctools. Produces a vcf with GP and """
     input:
-        combined_chr_bgen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz"),
+        combined_chr_gen=os.path.join(POST_COMBINE_PREFIX, "updated_rsid", "chr{chr}_combined_updated_rsid.gen.gz"),
         sample_file=os.path.join(POST_COMBINE_PREFIX, "combined.sample")
     output:
         vcf=os.path.join(POST_COMBINE_PREFIX, "vcf", "chr{chr}_maf_filtered.vcf.gz")
@@ -163,7 +154,7 @@ rule convert_to_vcf:
         threshold=0.5001 # Lowest threshold QCtools allows.
     shell:
         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
-            -g {input.combined_chr_bgen} \
+            -g {input.combined_chr_gen} \
             -s {input.sample_file} \
             -threshold {params.threshold} \
             -assume-chromosome {wildcards.chr} \
@@ -304,48 +295,6 @@ rule qctools_combine_variants:
             -threads {threads}"
 
 ############### Pre combine Datasets #####################
-# rule update_variant_ids:
-#     """ Remove low info snps. Takes low input filter snps and sample file.
-#     IMPORTANT: This uses assume chromosome when converting to bgen, otherwise
-#     these bgens will be messed when trying to convert to plink."""
-#     input:
-#         gen_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"),
-#         update_map=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "update", "chr{chr}_update_map.txt")
-#     output:
-#         updated_gen=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered_updated.bgen")
-#     log:
-#         os.path.join(LOGS, "update_variants", "{ds}", "chr{chr}_qctools.log")
-#     shell:
-#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/gavinband-qctool-ba5eaa44a62f/build/release/qctool_v2.0.1 \
-#             -g {input.gen_file} \
-#             -map-id-data {input.update_map} \
-#             -compare-variants-by snpid \
-#             -log {log} \
-#             -og {output.updated_gen}"
-
-# rule create_update_variant_files:
-#     """ Create the update variant id files
-#     22 22:16050435 16050435 T C 0.999
-#
-#      $ qctool -g <input file(s)> -og output.bgen -map-id-data <map file> [+other options]
-#     for example, this might be useful when updating files to match a new genome build.
-#
-#     The "map" file given to -map-id-data must be a text file with twelve named
-#     columns, in the following order: the current SNPID, rsid, chromosome,
-#     position, first and second alleles, followed by the desired updated
-#     SNPID, rsid, chromosome, position and alleles. The first line is
-#     treated as column names (currently it doesn't matter what these
-#     are called.) Variants not in this file are not affected by the
-#     mapping, and will be output unchanged.
-#     """
-#     input:
-#         gen_file=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "chr{chr}_filtered.gen.gz"),
-#         ref_file=os.path.join(RESOURCES, "grch37_2017_ref", "chrom{chr}_ref.txt.gz")
-#     output:
-#         update_map=os.path.join(PRE_COMBINE_PREFIX, "{ds}", "update", "chr{chr}_update_map.txt")
-#     run:
-#         utils.create_update_map(input.gen_file, input.ref_file, output.update_map)
-
 
 rule filter_low_info_dup_variants:
     """ Remove low info snps. Takes low input filter snps and sample file.
