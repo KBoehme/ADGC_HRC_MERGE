@@ -142,7 +142,7 @@ def dosage():
 		sline = line.split()
 		if line.startswith("##"):
 			if line.startswith("##INFO"): # Stick in new format field.
-				sys.stdout.write("##FORMAT=<ID=DS,Type=String,Description=\"Genotype dosage.\">\n")
+				sys.stdout.write("##FORMAT=<ID=DS,Type=Float,Number=1,Description=\"Genotype dosage.\">\n")
 			sys.stdout.write(line)
 			pass
 		elif line.startswith("#"):

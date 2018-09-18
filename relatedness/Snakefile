@@ -44,7 +44,7 @@ PLINK_EXT = ["bed", "bim", "fam"]
 KING1_EXT = ["TMP.ped", "TMP.dat", "unrelated.txt", "updateids.txt"]
 KING2_EXT = ["allsegs.txt", "unrelated_toberemoved.txt", "unrelated.txt"]
 
-localrules: bim_to_snp_ids_only, get_common_snps, remap_fids_for_king, copy_ld_pruned_common_snps_to_extra
+localrules: bim_to_snp_ids_only, get_common_snps, remap_fids_for_king, copy_qc_common_snps_to_extra
 
 BIM_NAMES = [Path(name).stem for name in os.listdir(BIM_DATA_SOURCE)]
 
@@ -52,17 +52,22 @@ rule all:
     """ This is an artificial snakemake rule that basically specifies as input
     the final files im attempting to get out of the workflow."""
     input:
-        os.path.join(EXTRA_FOLDER, "adgc_hrc_merged_common_snps.bim")
-        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par")
+        # os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim"),
+        # os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par")
+        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.{ext}"), ext=PLINK_EXT)
 
 rule eigenstrat:
     """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
-    04:30:00 runtime
+    04:30:00 runtime. Comment out plink or king, depending on what we end up
+    using.
     """
     input:
-        bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bed"),
-        fam=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.fam"),
-        bim=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bim")
+        bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_unrelated.bed"),
+        fam=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_unrelated.fam"),
+        bim=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_unrelated.bim")
+        # bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bed"),
+        # fam=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.fam"),
+        # bim=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.bim")
     output:
         pca=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par"),
         eval=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.evec")
@@ -82,33 +87,25 @@ rule eigenstrat:
         -l {log} -m 0 -k {params.number_pca}"
 
 # Use rule if using King Robust to filter
-# rule prune_unrelated_short_ids:
-#     """ Take list of unrelated samples from previous steps and keep them, and
-#     renames samples for eigenstrat.
-#     1. Run plink to keep unrelated.
-#     2. Rename to shorter ID's
-#     """
-#     input:
-#         king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_kingunrelated.txt"),
-#         final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
-#     output:
-#         expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_pruned", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT)
-#     params:
-#         # fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
-#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
-#         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_pruned", "adgc_hrc_unrelated")
-#         # update_id_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_names", "short_name_update.txt")
-#     shell:
-#         "plink --bfile {params.input_plink_base} --keep {input.king_unrelated} --make-bed --out {params.output_plink_base}"
-#         # awk '{{print($1, $2, \"IID_\"NR, \"FID_\"NR)}}' {params.fam} > {params.update_id_file} && \
-#         # plink --bfile {params.input_plink_base} \
-#         # --update-ids {params.update_id_file} \
-#         # --make-bed --out {params.output_plink_base}"
+rule prune_unrelated_short_ids:
+    """ Use list of king unrelated samples as input to a --keep plink command.
+    NOTICE: Make sure King removes all the samples!
+    """
+    input:
+        king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king1", "adgc_hrc_kingunrelated.txt"),
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
+    output:
+        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king1", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT)
+    params:
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
+        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king1", "adgc_hrc_unrelated")
+    shell:
+        "plink --bfile {params.input_plink_base} --keep {input.king_unrelated} --make-bed --out {params.output_plink_base}"
 
 rule plink_rel_cutoff:
     """ Just trying to do the rel cutoff using plink 1.9. Seems to get similiar
     (few less) samples at the end. Save a step of using plink to extract a list
-    of unrelated samples
+    of unrelated samples.
     """
     input:
         final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
@@ -124,7 +121,8 @@ rule plink_rel_cutoff:
         --make-bed --out {params.output_plink_base}"
 
 rule king_robust2:
-    """ Run KingRobust 2.1.5 with 3rd degree relative cutoff
+    """ Run KingRobust 2.1.5 with 3rd degree relative cutoff, but it only
+    ever does 2nd degree ;/
     """
     input:
         final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.bed")
@@ -163,12 +161,12 @@ rule shorten_ids:
     2. Rename to shorter ID's
     """
     input:
-        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
     output:
         expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames.{ext}"), ext=PLINK_EXT)
     params:
-        input_fam=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.fam"),
-        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps"),
+        input_fam=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps.fam"),
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps"),
         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
         update_id_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
     shell:
@@ -206,39 +204,39 @@ rule shorten_ids:
 #         --update-ids {params.update_id_file} \
 #         --make-bed --out {params.output_plink_base}"
 
-rule copy_ld_pruned_common_snps_to_extra:
+rule copy_qc_common_snps_to_extra:
     """ Simply copies the bim from previous step to final folder."""
     input:
-        os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.bim")
+        os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps.bim")
     output:
         os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim")
     shell:
         "cp {input} {output}"
 
-rule plink_final_prune:
-    """ Takes the prune.in file (maf, geno, indep filters) and creates the final plink set.
-    Upon reading the King documentation is suggests not LD-pruning.
-    Uses plink 1.9
-    Previously used following params
-    Options in effect:
-            --noweb
-            --bfile adgc_combined_common_snps
-            --maf 0.01
-            --geno 0.02
-            --indep-pairwise 1500 150 0.2
-            --out adgc.combined.commonsnps.thinned
-    """
-    input:
-        common_snps_bfile=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps.{ext}"), ext=PLINK_EXT)
-    output:
-        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
-    params:
-        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps"),
-        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps")
-    shell:
-        "plink --bfile {params.input_plink_base} \
-        --extract {params.input_plink_base}.prune.in \
-        --make-bed --out {params.output_plink_base}"
+# rule plink_final_prune:
+#     """ Takes the prune.in file (maf, geno, indep filters) and creates the final plink set.
+#     Upon reading the King documentation is suggests not LD-pruning.
+#     Uses plink 1.9
+#     Previously used following params
+#     Options in effect:
+#             --noweb
+#             --bfile adgc_combined_common_snps
+#             --maf 0.01
+#             --geno 0.02
+#             --indep-pairwise 1500 150 0.2
+#             --out adgc.combined.commonsnps.thinned
+#     """
+#     input:
+#         common_snps_bfile=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps.{ext}"), ext=PLINK_EXT)
+#     output:
+#         final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
+#     params:
+#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps"),
+#         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "qced", "adgc_hrc_merged_common_qc_snps")
+#     shell:
+#         "plink --bfile {params.input_plink_base} \
+#         --extract {params.input_plink_base}.prune.in \
+#         --make-bed --out {params.output_plink_base}"
 
 rule plink_extract_common_snps_and_filter:
     """ Extracts subset of common SNP's from plink files and then immediately filters and prunes them.
@@ -253,12 +251,11 @@ rule plink_extract_common_snps_and_filter:
         bim=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.bim"),
         common_snps=os.path.join(EXTRA_FOLDER, "adgc_hrc_common_snps.txt")
     output:
-        common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps.{ext}"), ext=PLINK_EXT)
+        common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps.{ext}"), ext=PLINK_EXT)
     params:
-        plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_snps"),
+        plink_base=os.path.join(PROCESS_DATA_SOURCE, "adgc_hrc_merged_common_qc_snps"),
         maf=0.01,
         geno=0.02,
-        indep_pairwise="1500 150 0.2"
     shell:
         "plink --bed  {input.bed} \
         --fam {input.fam} \
@@ -266,7 +263,6 @@ rule plink_extract_common_snps_and_filter:
         --extract {input.common_snps} \
         --maf {params.maf} \
         --geno {params.geno} \
-        --indep-pairwise {params.indep_pairwise} \
         --make-bed --out {params.plink_base}"
 
 rule get_common_snps:
