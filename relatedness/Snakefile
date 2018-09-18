@@ -23,11 +23,12 @@
 """
 
 from pathlib import Path
+from python_scripts import utils
 
 # This is the shared folder location, however due to lack of space cant be used.
 # ROOT = "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/"
 ROOT = "/fslhome/fslcollab192/compute"
-WORKING_DIR = "ADGC_HRC_COMBINE"
+WORKING_DIR = "ADGC_HRC_COMBINE_bkup"
 WORKFLOW_NAME = "relatedness_workflow"
 # RESOURCES_DATA_FOLDER = "resources"
 # SCRIPTS_DATA_FOLDER = "scripts/python_scripts"
@@ -53,8 +54,9 @@ rule all:
     the final files im attempting to get out of the workflow."""
     input:
         # os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim"),
-        # os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par")
-        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.{ext}"), ext=PLINK_EXT)
+        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par"),
+        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","plink", "adgc_hrc_rel_cutoff.{ext}"), ext=PLINK_EXT),
+        os.path.join(EXTRA_FOLDER, "adgc_hrc_unrelated_ids.txt")
 
 rule eigenstrat:
     """Must convert long ID's to temporary shortened ID's to make eigenstrat happy.. Eww
@@ -85,6 +87,21 @@ rule eigenstrat:
         -b {input.fam} -o {params.pca} \
         -p {params.plot} -e {params.eval} \
         -l {log} -m 0 -k {params.number_pca}"
+
+############################ Pruned unrelated set complete ####################
+
+rule convert_king_unrelated_set_ids_back:
+    """ the king unrelated file is in shortened ids. We must now look up these
+    id's and get them back to the long ones.
+    ADC1_NACC548317_08AD7682___NACC548317_08AD7682 NACC548317_08AD7682 FID_1 IID_1
+    """
+    input:
+        king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king1", "adgc_hrc_kingunrelated.txt"),
+        id_map=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
+    output:
+        adgc_unrelated_ids=os.path.join(EXTRA_FOLDER, "adgc_hrc_unrelated_ids.txt")
+    shell:
+        utils.create_remap_file(input.king_unrelated, input.id_map, adgc_unrelated_ids)
 
 # Use rule if using King Robust to filter
 rule prune_unrelated_short_ids:
@@ -170,7 +187,7 @@ rule shorten_ids:
         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "adgc_hrc_shortnames"),
         update_id_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
     shell:
-        "awk '{{print($1, $2, \"FID_\"NR, \"IID_\"NR)}}' {params.input_fam} > {params.update_id_file} && \
+        "awk '{{print($1, $2, \"F\"NR, \"I\"NR)}}' {params.input_fam} > {params.update_id_file} && \
         plink --bfile {params.input_plink_base} \
         --update-ids {params.update_id_file} \
         --make-bed --out {params.output_plink_base}"

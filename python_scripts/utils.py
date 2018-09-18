@@ -123,6 +123,19 @@ def rs_update_gen(gen_file, ref_file, output):
 	outputfile.close()
 	print("Done writing output gen: {}".format(output))
 
+def create_remap_file(short_ids, id_map, output):
+	# ADC1_NACC548317_08AD7682___NACC548317_08AD7682 NACC548317_08AD7682 F1 I1
+	id_map = {}
+	with open(id_map) as f:
+		for line in f:
+			sline = line.split()
+			id_map[f"{sline[2]}-{sline[3]}"] = f"{sline[0]} {sline[1]}"
+	with open(short_ids) as f, open(output) as out:
+		for line in f:
+			#FID_1   IID_1
+			sline=line.split()
+			out.write(id_map[f'{sline[0]}-{sline[1]}'])
+	print(f"Done writing output file: {output}")
 
 def dosage():
 	""" Convert vcf to dosage. Requires AF in order to differentiate major/minor reference allele. If the AF is > .5 then
