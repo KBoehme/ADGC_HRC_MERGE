@@ -33,17 +33,17 @@ PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "process", WORKFLOW
 PRE_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "pre_combine")
 POST_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "post_combine")
 
-FINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "final")
+FINAL_DATA_SOURCE = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "final")
 EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 
-RESOURCES = os.path.join(ROOT, "resources")
+RESOURCES = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "resources")
 SCRIPTS = os.path.join(ROOT, "scripts", "python_scripts")
 
 LOGS = os.path.join(PROCESS_DATA_SOURCE, "logs")
 
 MERGE_BASE_DATASET = "adc1"
 # Explicity set rules to run locally. All others will run on cluster w/ defaults
-localrules: create_sample_file_from_fam_per_study, keep_one_sample_file
+localrules: create_sample_file_from_fam_per_study, keep_one_sample_file, set_fam_to_missing
 DATASET_SKIP_LIST = []
 PLINK_EXT = ["bed", "bim", "fam"]
 
@@ -80,16 +80,40 @@ def get_all_combined_sample_files(wildcards):
 #####################################################################
 
 rule all:
-    """ This is an artificial snakemake rule that basically specifies as input
-    the final files im attempting to get out of the workflow.
-
-    See https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html?highlight=target%20rule#targets
+    """
+        Output of this workflow:
+            Chr1-22 vcf.gz files
+            Plink bed, bim, fam files
+            Corrected fam flag (file indicating rule ran)
     """
     input:
-        expand(os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz.tbi"), chr=CHROMOSOME)
+        expand(os.path.join(FINAL_DATA_SOURCE, "vcf", "adgc_hrc_combined_chr{chr}.vcf.gz.tbi"), chr=CHROMOSOME),
+        expand(os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.{ext}"), ext=PLINK_EXT),
+        # os.path.join(POST_COMBINE_PREFIX, "plink_prep", "updated_missing_final_fam.txt")
+
 
 ############### Plink production #####################
 # Yay we are using plink now!
+rule set_fam_to_missing:
+    """ Fam files are missing some data thats in covars. Set to -9 sex and status
+    """
+    input:
+        plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam")
+    output:
+        fixed_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        log_out=os.path.join(POST_COMBINE_PREFIX, "plink_prep", "updated_missing_final_fam.txt")
+    params:
+        temp_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam.tmp")
+    shell:
+        "awk '{{print $1,$2,$3,$4,-9,-9}}' {input.plink_fam} > {params.temp_fam}; \
+        sleep 2; \
+        rm {input.plink_fam}; \
+        sleep 3; \
+        mv {params.temp_fam} {output.fixed_fam}; \
+        sleep 3; \
+        touch {output.log_out}"
+
+
 rule convert_to_plink:
     """ Convert filtered bgen to plink format. Must use plink2 as we are using
     bgen format files."""

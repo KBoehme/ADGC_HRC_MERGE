@@ -1,0 +1,87 @@
+""" Covariate prep workflow
+"""
+
+ROOT = "/fslhome/fslcollab192/compute"
+WORKING_DIR = "ADGC_HRC_COMBINE"
+WORKFLOW_NAME = "covariate_workflow"
+
+COVAR_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data", "ADGC_Covariates")
+PROCESS_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "process", WORKFLOW_NAME)
+RELATEDNESS_PROCESS_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "process", "relatedness_workflow")
+
+FINAL_DATA_SOURCE = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "final")
+EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
+
+rule all:
+    """
+    Final output of covariate workflow is:
+            1. Merged covariate file, with PC's
+    """
+    input:
+        plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar"),
+        unrelated_plink_covar=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.covar")
+
+############## Covariate File preparation ##################################
+
+rule update_fam_files:
+    """ The fam files seem to have some missing data compared with the covariate
+    files. Lets update them.
+    """
+    input:
+        plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar")
+    output:
+        updated_plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+    shell:
+        ""
+
+
+rule create_covar_subsets_for_final_datasets:
+    """ fgreps out subsets of the covariate file for the datasets."""
+    input:
+        full_covar=os.path.join(EXTRA_FOLDER, "adgc_hrc_full_merged_with_pcs_covar.txt"),
+        plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        unrelated_plink_fam=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.fam"),
+    output:
+        plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar"),
+        unrelated_plink_covar=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.covar"),
+        tmp_full=temp("full.txt"),
+        tmp_unrelated=temp("unrelated.txt")
+    shell:
+        "rm -f {output.plink_covar}; rm -f {output.unrelated_plink_covar}; \
+        awk '{{print $1,$2}}' {input.plink_fam} >> {output.tmp_full}; \
+        head -n 1 {input.full_covar} >> {output.plink_covar}; \
+        LC_ALL=C fgrep -f {output.tmp_full} {input.full_covar} >> {output.plink_covar}; \
+        awk '{{print $1,$2}}' {input.unrelated_plink_fam} >> {output.tmp_unrelated}; \
+        head -n 1 {input.full_covar} >> {output.unrelated_plink_covar}; \
+        LC_ALL=C fgrep -f {output.tmp_unrelated} {input.full_covar} >> {output.unrelated_plink_covar}"
+
+rule add_pc_to_covar:
+    """ Combines all Covariate files """
+    input:
+        combined_covar=os.path.join(PROCESS_DATA_SOURCE, "adgc_initial_merged_covar_renamed.txt"),
+        eigen=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.evec"),
+        short_id_map=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
+    output:
+        final_covar=os.path.join(EXTRA_FOLDER, "adgc_hrc_full_merged_with_pcs_covar.txt")
+    shell:
+        "cat_covar.py add-pcs {input.combined_covar} {input.eigen} {input.short_id_map} {output.final_covar}"
+
+rule update_ids:
+    """ Simply updates ids to match our schema"""
+    input:
+        combined_covar=os.path.join(PROCESS_DATA_SOURCE, "adgc_initial_merged_covar.txt"),
+        short_id_map=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
+    output:
+        renamed_covar=os.path.join(PROCESS_DATA_SOURCE, "adgc_initial_merged_covar_renamed.txt")
+    shell:
+        "cat_covar.py update-ids {input.combined_covar} {input.short_id_map} {output.renamed_covar}"
+
+rule combine_covariate_files:
+    """ Combines all Covariate files """
+    input:
+        COVAR_DATA_SOURCE
+    output:
+        combined_covar=os.path.join(PROCESS_DATA_SOURCE, "adgc_initial_merged_covar.txt")
+    shell:
+        "cat_covar.py combine-covars {input} {output.combined_covar}"

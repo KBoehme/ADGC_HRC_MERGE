@@ -35,12 +35,20 @@
         "time": "05:00:00",
         "mem": "30000M"
     },
-    "prune_unrelated_shorted_ids": {
-        "time": "00:30:00",
-        "mem": "30000M"
-    },
     "eigenstrat": {
-        "time": "08:00:00",
+        "time": "20:00:00",
         "mem": "40000M"
+    },
+    "unrelated_filter_plink": {
+        "time": "02:00:00",
+        "mem": "40000M"
+    },
+    "unrelated_filter_vcf": {
+        "time": "30:00:00",
+        "mem": "40000M"
+    },
+    "tabix_vcf": {
+        "time": "05:00:00",
+        "mem": "30000M"
     }
 }

@@ -123,19 +123,25 @@ def rs_update_gen(gen_file, ref_file, output):
 	outputfile.close()
 	print("Done writing output gen: {}".format(output))
 
-def create_remap_file(short_ids, id_map, output):
+def create_remap_file(king_unrelated, id_map, unrelated_ids_plink, unrelated_ids_vcf):
+	""" Given the king unrelated output, and the id_map I create originally,
+	remap the short ids to long ids. The output will be used to prune the real
+	final dataset ids.
+	"""
 	# ADC1_NACC548317_08AD7682___NACC548317_08AD7682 NACC548317_08AD7682 F1 I1
-	id_map = {}
+	id_map_dict = {}
 	with open(id_map) as f:
 		for line in f:
 			sline = line.split()
-			id_map[f"{sline[2]}-{sline[3]}"] = f"{sline[0]} {sline[1]}"
-	with open(short_ids) as f, open(output) as out:
+			id_map_dict[f"{sline[2]}-{sline[3]}"] = f"{sline[0]} {sline[1]}"
+	with open(king_unrelated) as f, open(unrelated_ids_plink, 'w') as out_plink, open(unrelated_ids_vcf, 'w') as out_vcf:
 		for line in f:
 			#FID_1   IID_1
 			sline=line.split()
-			out.write(id_map[f'{sline[0]}-{sline[1]}'])
-	print(f"Done writing output file: {output}")
+			out_plink.write(id_map_dict[f'{sline[0]}-{sline[1]}']+"\n")
+			# Keep only first id for vcfs..
+			out_vcf.write(id_map_dict[f'{sline[0]}-{sline[1]}'].split()[0]+"\n")
+	print(f"Done writing output file: {unrelated_ids_plink} and {unrelated_ids_vcf}")
 
 def dosage():
 	""" Convert vcf to dosage. Requires AF in order to differentiate major/minor reference allele. If the AF is > .5 then
@@ -294,7 +300,7 @@ def sample_from_fam(input, output):
 				sample_sex = "1"
 			elif sex == "2":
 				sample_sex = "2"
-			elif sex == "-9":
+			elif sex == "-9" or sex == "0":
 				sample_sex = "0"
 			else:
 				print("Error reading fam file. Unkown sex code: {}".format(sex))
