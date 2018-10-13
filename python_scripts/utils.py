@@ -49,6 +49,135 @@ def create_update_map(gen_file, ref_file, update_map):
 					sys.exit("Failing outline not equal to 12.")
 				out.write(' '.join(outline)+"\n")
 
+def filter_related(preferred_samples, fam_file, mapping_id_file, pairwise_kinship, output):
+	"""
+	:param preferred_samples: ids of the unrelated case set to start with.
+	:param covariate_file: File with case,control status
+	:param mapping_id_file: File mapping short ids to long ids.
+	:param pairwise_kinship: kinship coefficients for all samples
+	:return:
+	"""
+	from collections import defaultdict
+	# Load cases into final list of samples to keep.
+	samples_to_keep = []
+	with open(preferred_samples, 'r') as samps:
+		for line in samps:
+			sline = line.split()
+			samples_to_keep.append("{} {}".format(sline[0], sline[1]))
+
+	status_map = {"control": [], "case": [], "missing": []}
+	with open(mapping_id_file, 'r') as map_file:
+		for line in map_file:
+			sline = line.split()
+			key = ""
+			if sline[2] == "1":
+				key = "control"
+			elif sline[2] == "2":
+				key = "case"
+			else:
+				key = "missing"
+			status_map[key].append("{} {}".format(sline[0], sline[1]))
+
+	# Algo goes:
+	# 1. Add unrelated cases to samples to keep list
+	# Loop through kinship output, ignoring cases.
+	missings = defaultdict(list)
+	controls = defaultdict(list)
+	all_kin_samples = set()
+	with open(pairwise_kinship, 'r') as kin:
+		dup, one, two, three = 0,0,0,0
+		header = next(kin)
+		for line in kin:
+			# print(f"On line = {line}")
+			sline = line.split()
+			person1 = "{} {}".format(sline[0], sline[1])
+			all_kin_samples.add(person1)
+			person2 = "{} {}".format(sline[2], sline[3])
+			if person1 in samples_to_keep:
+				continue
+			elif person1 in status_map['control']:
+				controls[person1].append(person2)
+			elif person1 in status_map['missing']:
+				missings[person1].append(person2)
+			else:
+				print("person1 = {} not in any status.".format(person1))
+			kinship = float(sline[7])
+			if kinship > 0.354:  # Dup
+				dup += 1
+			elif kinship > 0.1777:  # 1st
+				one += 1
+			elif kinship > 0.0884:  # 2nd
+				two += 1
+			elif kinship > 0.0442:  # 3rd
+				three += 1
+	print(f"Dup/MZ = {dup}")
+	print(f"1st = {one}")
+	print(f"2nd = {two}")
+	print(f"3rd = {three}")
+	print(f"Length of kin samples = {len(all_kin_samples)}")
+	print(f"Len of samples to keep = {len(samples_to_keep)}")
+
+	# Add in any samples not in this kinship file
+	not_in_kin_file = 0
+	with open(fam_file, 'r') as fam:
+		for line in fam:
+			sline = line.split()
+			sample = "{} {}".format(sline[0], sline[1])
+			if sample in all_kin_samples:
+				# Skip it.
+				pass
+			else:
+				samples_to_keep.append(sample)
+				not_in_kin_file += 1
+
+	# Lets loop through missing and remove them
+	sorted_missings = sorted(missings.items(), key=lambda kv: len(kv[1]), reverse=True)
+	sorted_controls = sorted(controls.items(), key=lambda kv: len(kv[1]), reverse=True)
+
+	def remove_sample(person_to_remove):
+		""" Loop through samples_to_keep and controls to see """
+		for i, (p1, related_list) in enumerate(sorted_missings):
+			if related_list and person_to_remove in related_list:
+				sorted_missings[i] = (p1, related_list.remove(person_to_remove))
+		for i, (p1, related_list) in enumerate(sorted_controls):
+			if related_list and person_to_remove in related_list:
+				sorted_controls[i] = (p1, related_list.remove(person_to_remove))
+
+	removed_missings = 0
+	added_missings = 0
+	removed_controls = 0
+	added_controls = 0
+	for p1, related_list in sorted_missings:
+		# print(p1, related_list)
+		if related_list: # If this sample has relationships, remove it.
+			removed_missings += 1
+			remove_sample(p1)
+		else: # Otherwise, we can add it to samples_to_keep
+			added_missings += 1
+			# print(f"adding sample p1={p1} to keep list.")
+			samples_to_keep.append(p1)
+
+	for p1, related_list in sorted_controls:
+		# print(p1, related_list)
+		if related_list: # If this sample has relationships, remove it.
+			removed_controls += 1
+			remove_sample(p1)
+		else: # Otherwise, we can add it to samples_to_keep
+			added_controls += 1
+			# print(f"adding sample p1={p1} to keep list.")
+			samples_to_keep.append(p1)
+	print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	print(f"not_in_kin_file = {not_in_kin_file}")
+	print(f"removed_missings = {removed_missings}")
+	print(f"added_missings = {added_missings}")
+	print(f"removed_controls = {removed_controls}")
+	print(f"added_controls = {added_controls}")
+	print(f"Len of samples to keep = {len(samples_to_keep)}")
+
+	with open(output, 'w') as out:
+		out.write('\n'.join(samples_to_keep))
+
+
 def fix_vcf(input_vcf, chromNum):
 	""" Strips the ,22 and adds the contig header. """
 	import gzip

@@ -33,7 +33,7 @@ PROCESS_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "process", WORKFLOW
 PRE_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "pre_combine")
 POST_COMBINE_PREFIX = os.path.join(PROCESS_DATA_SOURCE, "post_combine")
 
-FINAL_DATA_SOURCE = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "final")
+FINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "final")
 EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 
 RESOURCES = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "resources")

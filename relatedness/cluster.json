@@ -11,7 +11,7 @@
         "mail-type": "FAIL",
         "gid": "fslg_KauweLab"
     },
-    "plink_extract_common_snps_and_filter": {
+    "plink_extract_common_snps_cases_and_filter": {
         "time": "01:00:00",
         "mem": "50000M"
     },
@@ -23,12 +23,24 @@
         "time": "01:00:00",
         "mem": "20000M"
     },
-    "king_robust1": {
+    "king_robust1_cases": {
         "time": "5:00:00",
         "mem": "30000M"
     },
-    "king_robust2": {
-        "time": "02:00:00",
+    "king_robust1_controls": {
+        "time": "5:00:00",
+        "mem": "30000M"
+    },
+    "full_plink_shorten_ids": {
+        "time": "05:00:00",
+        "mem": "20000M"
+    },
+    "king_robust1_missing": {
+        "time": "5:00:00",
+        "mem": "30000M"
+    },
+    "king2_kinship": {
+        "time": "08:00:00",
         "mem": "30000M"
     },
     "plink_rel_cutoff": {

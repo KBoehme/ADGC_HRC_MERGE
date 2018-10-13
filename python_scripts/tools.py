@@ -9,6 +9,7 @@ def describe(file):
     df = pd.read_csv(file, header=1, sep='\s', na_values=["-9"])
     # pandas_profiling.ProfileReport(df)
     print(df.describe().transpose())
+    print(df.)
 
 if __name__ == '__main__':
   fire.Fire()
