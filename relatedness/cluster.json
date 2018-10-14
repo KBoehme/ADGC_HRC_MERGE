@@ -27,6 +27,22 @@
         "time": "5:00:00",
         "mem": "30000M"
     },
+    "plink_remove_het_kinship": {
+      "time": "6:00:00",
+      "mem": "30000M"
+    },
+    "plink_full_kinship": {
+      "time": "6:00:00",
+      "mem": "30000M"
+    },
+    "king1_remove_het_kinship": {
+      "time": "5:00:00",
+      "mem": "30000M"
+    },
+    "king1_full_kinship": {
+      "time": "5:00:00",
+      "mem": "30000M"
+    },
     "king_robust1_controls": {
         "time": "5:00:00",
         "mem": "30000M"
