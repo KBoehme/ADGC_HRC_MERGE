@@ -9,7 +9,7 @@ COVAR_DATA_SOURCE = os.path.join(ROOT, "ADGC_Data", "ADGC_Covariates")
 PROCESS_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "process", WORKFLOW_NAME)
 RELATEDNESS_PROCESS_DATA_SOURCE = os.path.join(ROOT, WORKING_DIR, "process", "relatedness_workflow")
 
-FINAL_DATA_SOURCE = os.path.join("/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu", "final")
+FINAL_DATA_SOURCE = os.path.join(ROOT, "ADGC_HRC_COMBINE", "final")
 EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 
 rule all:
@@ -25,16 +25,18 @@ rule all:
 
 rule update_fam_files:
     """ The fam files seem to have some missing data compared with the covariate
-    files. Lets update them.
+    files. Update them to make the last column -9
     """
     input:
         plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
-        plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar")
     output:
-        updated_plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "fam_fixed_flag.txt")
     shell:
-        ""
-
+        "awk '{print $1,$2,$3,$4,-9,-9}' {input.plink_fam} > fixed_fam.fam.tmp \
+        mv {input.plink_fam} {input.plink_fam}.bkup \
+        mv fixed_fam.fam.tmp {input.plink_fam} \
+        touch {output.fix_flag} \
+        echo Done!"
 
 rule create_covar_subsets_for_final_datasets:
     """ fgreps out subsets of the covariate file for the datasets."""

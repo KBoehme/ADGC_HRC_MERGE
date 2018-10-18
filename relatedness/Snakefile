@@ -52,7 +52,7 @@ KING1_KINSHIP_EXT = ["TMP.ped", "TMP.dat", ".kin", ".kin0"]
 KING2_EXT = ["allsegs.txt", "unrelated_toberemoved.txt", "unrelated.txt"]
 CHROMOSOME = list(range(1,23))
 
-localrules: remove_related_using_kinship, plink_keep_within_status_unrelated, create_shorten_ids, get_list_of_cases, bim_to_snp_ids_only, get_common_snps, get_all_genotyped_snps, remap_fids_for_king, copy_qc_common_snps_to_extra, prune_unrelated_short_ids, create_remap_id_file, prepare_eigen_start_inputs,  create_covar_subsets_for_final_datasets add_pc_to_covar update_ids combine_covariate_files
+localrules: prune_mostly_unrelated, remove_related_using_kinship, plink_keep_within_status_unrelated, create_shorten_ids, get_list_of_cases, bim_to_snp_ids_only, get_common_snps, get_all_genotyped_snps, remap_fids_for_king, copy_qc_common_snps_to_extra, prune_unrelated_short_ids, create_remap_id_file, prepare_eigen_start_inputs,  create_covar_subsets_for_final_datasets add_pc_to_covar update_ids combine_covariate_files
 
 BIM_NAMES = [Path(name).stem for name in os.listdir(BIM_DATA_SOURCE)]
 
@@ -67,22 +67,10 @@ rule all:
             3. Combined covariate file with new PC's attached
     """
     input:
-        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_unrelated_set.txt"),
-        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT),
-        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "remove_het", "adgc_hrc_kinship.kin0"),
-        # os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_all", "adgc_hrc_genome.genome"),
-        # os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_nohet", "adgc_hrc_genome.genome"),
-        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "all", "adgc_hrc_kinship.kin0"),
-        # os.path.join(EXTRA_FOLDER, "adgc_hrc_common_snps.txt"),
-        # expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "king1", "adgc_hrc_king{ext}"), ext=KING1_EXT),
-        # plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar"), # Covar output
-        # unrelated_plink_covar=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.covar") # Covar output
-        # Real outputs
-        # expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_king{ext}"), ext=KING1_EXT)
-        # expand(os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.{ext}"), ext=PLINK_EXT),
-        # expand(os.path.join(FINAL_DATA_SOURCE, "unrelated", "vcf", "adgc_hrc_combined_unrelated_chr{chr}.vcf.gz.tbi"), chr=CHROMOSOME),
-        # os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par"),
-        # os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim")
+        expand(os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.{ext}"), ext=PLINK_EXT),
+        expand(os.path.join(FINAL_DATA_SOURCE, "unrelated", "vcf", "adgc_hrc_combined_unrelated_chr{chr}.vcf.gz.tbi"), chr=CHROMOSOME),
+        os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen", "adgc_pruned_3unrelated.pca.par"),
+        os.path.join(EXTRA_FOLDER,  "adgc_hrc_merged_common_qc_snps.bim")
 
 
 rule unrelated_filter_plink:
@@ -127,7 +115,7 @@ rule eigenstrat:
     using.
     """
     input:
-        bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","king1", "adgc_hrc_unrelated.bed"),
+        bed=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","eigen_input", "adgc_hrc_unrelated.bed"),
         pedind=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","eigen", "adgc_hrc_unrelated.pedind"),
         pedsnp=os.path.join(PROCESS_DATA_SOURCE, "related_pruning","eigen", "adgc_hrc_unrelated.pedsnp")
     output:
@@ -167,13 +155,13 @@ rule create_remap_id_file:
     id's and get them back to the long ones for filtering using plink and vcftools
     """
     input:
-        king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_kingunrelated.txt"),
+        final_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_kingunrelated.txt"),
         id_map=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_name_update.txt")
     output:
         unrelated_ids_plink=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_unrelated_ids_plink.txt"),
         unrelated_ids_vcf=os.path.join(FINAL_DATA_SOURCE, "unrelated", "vcf", "adgc_hrc_unrelated_ids_vcf.txt")
     shell:
-        "utils_script.py create-remap-file {input.king_unrelated} {input.id_map} {output.unrelated_ids_plink} {output.unrelated_ids_vcf}"
+        "utils_script.py create-remap-file {input.final_unrelated} {input.id_map} {output.unrelated_ids_plink} {output.unrelated_ids_vcf}"
 
 # Use rule if using King Robust to filter
 rule prune_unrelated_short_ids:
@@ -181,7 +169,7 @@ rule prune_unrelated_short_ids:
     NOTICE: Make sure King removes all the samples!
     """
     input:
-        king_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_unrelated_set.txt"),
+        final_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_kingunrelated.txt"),
         final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT)
     output:
         expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT)
@@ -189,9 +177,41 @@ rule prune_unrelated_short_ids:
         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
         output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_unrelated")
     shell:
-        "plink --bfile {params.input_plink_base} --keep {input.king_unrelated} --make-bed --out {params.output_plink_base}"
+        "plink --bfile {params.input_plink_base} --keep {input.final_unrelated} --make-bed --out {params.output_plink_base}"
 
 ################### Squeeze as many cases ###############
+
+rule final_king_unrelated:
+    """ Run KingRobust 1.4 with 3rd degree relative cutoff
+    /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
+    """
+    input:
+        mostly_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "mostly_unrelated", "adgc_hrc_unrelated.bed")
+    output:
+        king_output=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_kingunrelated.txt")
+    params:
+        king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "eigen_input", "adgc_hrc_king"),
+        related_cutoff=3
+    shell:
+        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
+        -b {input.mostly_pruned_bfiles} --unrelated \
+        --degree {params.related_cutoff} \
+        --prefix {params.king_output_base}"
+
+rule intermediate_plink_filter:
+    """ Use list of king unrelated samples as input to a --keep plink command.
+    NOTICE: Make sure King removes all the samples!
+    """
+    input:
+        mostly_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "mostly_unrelated_set.txt"),
+        final_pruned_bfiles=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT)
+    output:
+        expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "mostly_unrelated", "adgc_hrc_unrelated.{ext}"), ext=PLINK_EXT)
+    params:
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
+        output_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "mostly_unrelated", "adgc_hrc_unrelated")
+    shell:
+        "plink --bfile {params.input_plink_base} --keep {input.mostly_unrelated} --make-bed --out {params.output_plink_base}"
 
 rule remove_related_using_kinship:
     """ Given full fam file, kinship estimates for said fam file set, and a
@@ -199,18 +219,18 @@ rule remove_related_using_kinship:
     maximize cases > controls > missing. """
     input:
         unrelated_cases=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases", "king1", "adgc_hrc_kingunrelated.txt"),
-        fam_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.fam"),
+        fam_file=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "het_filter", "adgc_hrc_common_qc_snps.fam"),
         kinship_estimates=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "remove_het", "adgc_hrc_kinship.kin0"),
         status_map=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "short_id_status_map.txt"),
     output:
-        final_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "final_unrelated_set.txt"),
+        mostly_unrelated=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "mostly_unrelated_set.txt"),
     shell:
         "utils_script.py filter-related \
         {input.unrelated_cases} \
         {input.fam_file} \
         {input.status_map} \
         {input.kinship_estimates} \
-        {output.final_unrelated}"
+        {output.mostly_unrelated}"
 
 rule king1_remove_het_kinship:
     """ Calculate kinship for the whole set"""
@@ -227,124 +247,8 @@ rule king1_remove_het_kinship:
         --degree {params.related_cutoff} \
         --prefix {params.king_output_base}"
 
-rule king1_full_kinship:
-    """ Calculate kinship for the whole set"""
-    input:
-        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.bed"),
-    output:
-        king_output=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "all", "adgc_hrc_kinship.kin0")
-    params:
-        king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "all", "adgc_hrc_kinship"),
-        related_cutoff=3
-    shell:
-        "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
-        -b {input.final_pruned_bfiles} --kinship \
-        --degree {params.related_cutoff} \
-        --prefix {params.king_output_base}"
-
-rule plink_remove_het_kinship:
-    """ Calculate kinship for the whole set"""
-    input:
-        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "het_filter", "adgc_hrc_common_qc_snps.bed")
-    output:
-        plink_output=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_nohet", "adgc_hrc_genome.genome")
-    params:
-        plink_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_nohet", "adgc_hrc_genome"),
-        related_cutoff=3
-    shell:
-        "plink --bfile {input.final_pruned_bfiles} --genome --out {params.plink_output_base}"
-
-rule plink_full_kinship:
-    """ Calculate kinship for the whole set"""
-    input:
-        final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.bed"),
-    output:
-        plink_output=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_all", "adgc_hrc_genome.genome")
-    params:
-        plink_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "full_kinship", "plink_all", "adgc_hrc_genome"),
-        related_cutoff=3
-    shell:
-        "plink --bfile {input.final_pruned_bfiles} --genome --out {params.plink_output_base}"
-
-# rule king2_kinship:
-#     input:
-#         final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases_others", "adgc_cases_others_only.bed")
-#     output:
-#         king_output=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases_others", "king2", "adgc_hrc_kinship.kin0")
-#     params:
-#         king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases_others", "king2", "adgc_hrc_kinship"),
-#         related_cutoff=3
-#     shell:
-#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
-#         -b {input.final_pruned_bfiles} --kinship \
-#         --degree {params.related_cutoff} \
-#         --prefix {params.king_output_base}"
-
-# rule plink_keep_within_status_unrelated:
-#     """ Just get controls and missing.
-#     Uses plink 1.9
-#     """
-#     input:
-#         plink_files=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT),
-#         unrelated_cases_and_others=os.path.join(PROCESS_DATA_SOURCE, "within_status_unrelateds.txt")
-#     output:
-#         common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases_others", "adgc_cases_others_only.{ext}"), ext=PLINK_EXT)
-#     params:
-#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
-#         plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases_others", "adgc_cases_others_only"),
-#     shell:
-#         "plink --bfile {params.input_plink_base} \
-#         --keep {input.unrelated_cases_and_others} \
-#         --make-bed --out {params.plink_base}"
-
-# rule create_unrelated_cases_plus_all_other_plink:
-#     """ Create a list of unrelated cases plus all controls and missing.
-#     Filter out a weird sample that shows up thousands of times F30105"""
-#     input:
-#         unrelated_cases=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases", "king1", "adgc_hrc_kingunrelated.txt"),
-#         unrelated_missing=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "king1", "adgc_hrc_kingunrelated.txt"),
-#         unrelated_controls=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "king1", "adgc_hrc_kingunrelated.txt"),
-#     output:
-#         os.path.join(PROCESS_DATA_SOURCE, "within_status_unrelateds.txt")
-#     shell:
-#         "cat {input} | grep -v F30105 >> {output}"
-
 ################### End Squeeze as many cases ###############
 
-# rule king_robust1_missing:
-#     """ Run KingRobust 1.4 with 3rd degree relative cutoff
-#     /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
-#     """
-#     input:
-#         final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "adgc_missing_only.bed")
-#     output:
-#         king_output=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "king1", "adgc_hrc_king{ext}"), ext=KING1_EXT)
-#     params:
-#         king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "king1", "adgc_hrc_king"),
-#         related_cutoff=3
-#     shell:
-#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
-#         -b {input.final_pruned_bfiles} --unrelated \
-#         --degree {params.related_cutoff} \
-#         --prefix {params.king_output_base}"
-#
-# rule king_robust1_controls:
-#     """ Run KingRobust 1.4 with 3rd degree relative cutoff
-#     /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
-#     """
-#     input:
-#         final_pruned_bfiles=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "adgc_controls_only.bed")
-#     output:
-#         king_output=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "king1", "adgc_hrc_king{ext}"), ext=KING1_EXT)
-#     params:
-#         king_output_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "king1", "adgc_hrc_king"),
-#         related_cutoff=3
-#     shell:
-#         "/fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king1.4 \
-#         -b {input.final_pruned_bfiles} --unrelated \
-#         --degree {params.related_cutoff} \
-#         --prefix {params.king_output_base}"
-#
 rule king_robust1_cases:
     """ Run KingRobust 1.4 with 3rd degree relative cutoff
     /fslhome/fslcollab192/fsl_groups/fslg_KauweLab/compute/ADGC_2018_combined/alois.med.upenn.edu/programs/king2.1.5
@@ -362,51 +266,17 @@ rule king_robust1_cases:
         --degree {params.related_cutoff} \
         --prefix {params.king_output_base}"
 
-# rule plink_keep_missing:
-#     """ Just get cases for King Robust run.
-#     Uses plink 1.9
-#     """
-#     input:
-#         plink_files=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT),
-#         case_ids=os.path.join(PROCESS_DATA_SOURCE, "missing_ids.txt")
-#     output:
-#         common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "adgc_missing_only.{ext}"), ext=PLINK_EXT)
-#     params:
-#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
-#         plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "missing", "adgc_missing_only"),
-#     shell:
-#         "plink --bfile {params.input_plink_base} \
-#         --keep {input.case_ids} \
-#         --make-bed --out {params.plink_base}"
-#
-# rule plink_keep_controls:
-#     """ Just get cases for King Robust run.
-#     Uses plink 1.9
-#     """
-#     input:
-#         plink_files=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT),
-#         case_ids=os.path.join(PROCESS_DATA_SOURCE, "control_ids.txt")
-#     output:
-#         common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "adgc_controls_only.{ext}"), ext=PLINK_EXT)
-#     params:
-#         input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
-#         plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "controls", "adgc_controls_only"),
-#     shell:
-#         "plink --bfile {params.input_plink_base} \
-#         --keep {input.case_ids} \
-#         --make-bed --out {params.plink_base}"
-#
 rule plink_keep_cases:
     """ Just get cases for King Robust run.
     Uses plink 1.9
     """
     input:
-        plink_files=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT),
+        plink_files=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "het_filter", "adgc_hrc_common_qc_snps.{ext}"), ext=PLINK_EXT),
         case_ids=os.path.join(PROCESS_DATA_SOURCE, "case_ids.txt")
     output:
         common_extracted=expand(os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases", "adgc_cases_only.{ext}"), ext=PLINK_EXT)
     params:
-        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "adgc_hrc_common_qc_snps"),
+        input_plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "plink_qced", "het_filter", "adgc_hrc_common_qc_snps"),
         plink_base=os.path.join(PROCESS_DATA_SOURCE, "related_pruning", "cases", "adgc_cases_only"),
     shell:
         "plink --bfile {params.input_plink_base} \

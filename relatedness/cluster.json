@@ -3,9 +3,9 @@
     "__default__" :
     {
         "account" : "fslcollab192",
-        "time" : "00:30:00",
+        "time" : "05:30:00",
         "ntasks" : 1,
-        "mem": "5000M",
+        "mem": "30000M",
         "name": "{rule}.{wildcards}",
         "mail-user": "kevinlboehme@gmail.com,taq1fok1@gmail.com",
         "mail-type": "FAIL",
@@ -22,6 +22,10 @@
     "remap_fids_for_king": {
         "time": "01:00:00",
         "mem": "20000M"
+    },
+    "final_king_unrelated": {
+      "time": "5:00:00",
+      "mem": "30000M"
     },
     "king_robust1_cases": {
         "time": "5:00:00",

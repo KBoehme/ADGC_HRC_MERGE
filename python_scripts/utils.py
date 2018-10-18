@@ -8,7 +8,6 @@ def get_mem(wildcards):
 	print(wildcards)
 	return int(get_size_mb('output.dat')*10)
 
-
 def read_ref_file(rs_reference):
 	rsRefs = {}
 	with gzip.open(rs_reference, 'rt') as openRef:
@@ -59,16 +58,20 @@ def filter_related(preferred_samples, fam_file, mapping_id_file, pairwise_kinshi
 	"""
 	from collections import defaultdict
 	# Load cases into final list of samples to keep.
+	all_kinships = []
 	samples_to_keep = []
+	unrelated_cases = []
 	with open(preferred_samples, 'r') as samps:
-		for line in samps:
-			sline = line.split()
+		for i, line in enumerate(samps):
+			sline = line.strip().split()
 			samples_to_keep.append("{} {}".format(sline[0], sline[1]))
+	print(f"!!!!!! Added {i} unrelated case samples. Total samples = {len(samples_to_keep)}")
 
+	# Load mapping_id_file into dictionary.
 	status_map = {"control": [], "case": [], "missing": []}
 	with open(mapping_id_file, 'r') as map_file:
 		for line in map_file:
-			sline = line.split()
+			sline = line.strip().split()
 			key = ""
 			if sline[2] == "1":
 				key = "control"
@@ -78,29 +81,69 @@ def filter_related(preferred_samples, fam_file, mapping_id_file, pairwise_kinshi
 				key = "missing"
 			status_map[key].append("{} {}".format(sline[0], sline[1]))
 
+	# remove samples related to cases
+	sample_related_to_case = []
+	all_kin_samples = set()
+	with open(pairwise_kinship, 'r') as kin:
+		header = next(kin)
+		for line in kin:
+			sline = line.strip().split()
+			person1 = "{} {}".format(sline[0], sline[1])
+			person2 = "{} {}".format(sline[2], sline[3])
+			all_kin_samples.add(person1)
+			all_kin_samples.add(person2)
+			if person2 in samples_to_keep:
+				# print("new sample_related_to_case")
+				# if person2 is a case we are keeping, and person1 is not
+				# if person1 in status_map['case']:
+				# 	print(f"person1={person1}, person2={person2}")
+				# 	input("This is not expected")
+				sample_related_to_case.append(person1)
+	print(f"Number of samples related to a case = {len(sample_related_to_case)}")
 	# Algo goes:
 	# 1. Add unrelated cases to samples to keep list
 	# Loop through kinship output, ignoring cases.
+	skipped_rel_case = 0
 	missings = defaultdict(list)
 	controls = defaultdict(list)
-	all_kin_samples = set()
+	# cases = defaultdict(list)
 	with open(pairwise_kinship, 'r') as kin:
 		dup, one, two, three = 0,0,0,0
 		header = next(kin)
 		for line in kin:
 			# print(f"On line = {line}")
-			sline = line.split()
+			sline = line.strip().split()
 			person1 = "{} {}".format(sline[0], sline[1])
-			all_kin_samples.add(person1)
 			person2 = "{} {}".format(sline[2], sline[3])
-			if person1 in samples_to_keep:
-				continue
-			elif person1 in status_map['control']:
-				controls[person1].append(person2)
-			elif person1 in status_map['missing']:
-				missings[person1].append(person2)
+			all_kinships.append(person1+":"+person2)
+			if person1 in sample_related_to_case:
+				# Skip this person completely
+				skipped_rel_case += 1
+				pass
 			else:
-				print("person1 = {} not in any status.".format(person1))
+				if person1 in status_map['case']:
+					# print("person1 is case")
+					pass
+					# # This sample is already in samples_to_keep.
+					# cases[person1].append(person2)
+				elif person1 in status_map['control']:
+					# print("person1 is control")
+					if (person2 in status_map['case'] and person2 not in samples_to_keep) or person2 in sample_related_to_case:
+						# This relationship is with a case that will not be in the final set.
+						pass
+					else:
+						# print("appending to")
+						controls[person1].append(person2)
+				elif person1 in status_map['missing']:
+					# print("person1 is missing")
+					if (person2 in status_map['case'] and person2 not in samples_to_keep) or person2 in sample_related_to_case:
+						# This relationship is with a case that will not be in the final set.
+						pass
+					else:
+						# print("appending to")
+						missings[person1].append(person2)
+				else:
+					print("person1 = {} not in any status.".format(person1))
 			kinship = float(sline[7])
 			if kinship > 0.354:  # Dup
 				dup += 1
@@ -110,68 +153,74 @@ def filter_related(preferred_samples, fam_file, mapping_id_file, pairwise_kinshi
 				two += 1
 			elif kinship > 0.0442:  # 3rd
 				three += 1
+	print(f"skipped_rel_case = {skipped_rel_case}")
 	print(f"Dup/MZ = {dup}")
 	print(f"1st = {one}")
 	print(f"2nd = {two}")
 	print(f"3rd = {three}")
 	print(f"Length of kin samples = {len(all_kin_samples)}")
 	print(f"Len of samples to keep = {len(samples_to_keep)}")
-
-	# Add in any samples not in this kinship file
-	not_in_kin_file = 0
-	with open(fam_file, 'r') as fam:
-		for line in fam:
-			sline = line.split()
-			sample = "{} {}".format(sline[0], sline[1])
-			if sample in all_kin_samples:
-				# Skip it.
-				pass
-			else:
-				samples_to_keep.append(sample)
-				not_in_kin_file += 1
-
 	# Lets loop through missing and remove them
 	sorted_missings = sorted(missings.items(), key=lambda kv: len(kv[1]), reverse=True)
 	sorted_controls = sorted(controls.items(), key=lambda kv: len(kv[1]), reverse=True)
-
+	sampe_of_interest = ["F9208 I9208", "F7249 I7249"]
 	def remove_sample(person_to_remove):
-		""" Loop through samples_to_keep and controls to see """
+		""" Loop through missing and controls to """
+		debug = False
+		if person_to_remove in sampe_of_interest:
+			debug=True
 		for i, (p1, related_list) in enumerate(sorted_missings):
 			if related_list and person_to_remove in related_list:
+				if debug:
+					print(p1, related_list)
 				sorted_missings[i] = (p1, related_list.remove(person_to_remove))
 		for i, (p1, related_list) in enumerate(sorted_controls):
 			if related_list and person_to_remove in related_list:
+				if debug:
+					print(p1, related_list)
 				sorted_controls[i] = (p1, related_list.remove(person_to_remove))
-
+	not_in_kin_not_case = 0
+	with open(fam_file, 'r') as fam:
+		for line in fam:
+			sline = line.strip().split()
+			sample = "{} {}".format(sline[0], sline[1])
+			if sample not in all_kin_samples and sample not in samples_to_keep:
+				# add_sample_to_final_output()
+				if sample in sampe_of_interest:
+					print(f"Adding not in kinship file sample {sample}")
+				samples_to_keep.append(sample)
+				not_in_kin_not_case += 1
+	print(f"!!!!!! Added {not_in_kin_not_case} not_in_kin_not_case. Total samples = {len(samples_to_keep)}")
 	removed_missings = 0
 	added_missings = 0
 	removed_controls = 0
 	added_controls = 0
 	for p1, related_list in sorted_missings:
 		# print(p1, related_list)
-		if related_list: # If this sample has relationships, remove it.
-			removed_missings += 1
-			remove_sample(p1)
-		else: # Otherwise, we can add it to samples_to_keep
+		if related_list is None or len(related_list) == 0: # If this sample has relationships, remove it.
 			added_missings += 1
 			# print(f"adding sample p1={p1} to keep list.")
+			if p1 in sampe_of_interest:
+				print("missing Adding it {p1}, {related_list}")
 			samples_to_keep.append(p1)
-
+		else: # Otherwise, we can add it to samples_to_keep
+			removed_missings += 1
+			remove_sample(p1)
+	print(f"!!!!!! Added {added_missings} Missing samples. Total samples = {len(samples_to_keep)}")
 	for p1, related_list in sorted_controls:
 		# print(p1, related_list)
-		if related_list: # If this sample has relationships, remove it.
-			removed_controls += 1
-			remove_sample(p1)
-		else: # Otherwise, we can add it to samples_to_keep
+		if related_list is None or len(related_list) == 0: # If no more relationships
 			added_controls += 1
 			# print(f"adding sample p1={p1} to keep list.")
+			if p1 in sampe_of_interest:
+				print(f"control Adding it {p1}, {related_list}")
 			samples_to_keep.append(p1)
-	print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	print(f"not_in_kin_file = {not_in_kin_file}")
+		else: # Otherwise, remove it
+			removed_controls += 1
+			remove_sample(p1) # Remove sample from any other relationship array it was in.
+	print(f"!!!!!! Added {added_controls} Control samples. Total samples = {len(samples_to_keep)}")
 	print(f"removed_missings = {removed_missings}")
-	print(f"added_missings = {added_missings}")
 	print(f"removed_controls = {removed_controls}")
-	print(f"added_controls = {added_controls}")
 	print(f"Len of samples to keep = {len(samples_to_keep)}")
 
 	with open(output, 'w') as out:
