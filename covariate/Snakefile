@@ -15,11 +15,13 @@ EXTRA_FOLDER = os.path.join(FINAL_DATA_SOURCE, "auxiliary")
 rule all:
     """
     Final output of covariate workflow is:
-            1. Merged covariate file, with PC's
+        1. Merged covariate file, with PC's
     """
     input:
         plink_covar=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.covar"),
-        unrelated_plink_covar=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.covar")
+        unrelated_plink_covar=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.covar"),
+        full_fam_fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "full_fam_fixed_flag.txt"),
+        unrelated_fam_fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "unrelated_fam_fixed_flag.txt"),
 
 ############## Covariate File preparation ##################################
 
@@ -29,14 +31,21 @@ rule update_fam_files:
     """
     input:
         plink_fam=os.path.join(FINAL_DATA_SOURCE, "plink", "adgc_hrc_merged_qced.fam"),
+        unrelated_plink_fam=os.path.join(FINAL_DATA_SOURCE, "unrelated", "plink", "adgc_hrc_merged_unrelated.fam"),
     output:
-        fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "fam_fixed_flag.txt")
+        fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "fam_fixed_flag.txt"),
+        unrelated_fix_flag=os.path.join(RELATEDNESS_PROCESS_DATA_SOURCE, "related_pruning", "unrelated_fam_fixed_flag.txt")
     shell:
         "awk '{print $1,$2,$3,$4,-9,-9}' {input.plink_fam} > fixed_fam.fam.tmp \
         mv {input.plink_fam} {input.plink_fam}.bkup \
         mv fixed_fam.fam.tmp {input.plink_fam} \
-        touch {output.fix_flag} \
-        echo Done!"
+        touch {output.fix_flag} && \
+        echo Done with full fam fix \
+        awk '{print $1,$2,$3,$4,-9,-9}' {input.unrelated_plink_fam} > unrelated_fixed_fam.fam.tmp \
+        mv {input.unrelated_plink_fam} {input.unrelated_plink_fam}.bkup \
+        mv unrelated_fixed_fam.fam.tmp {input.unrelated_plink_fam} \
+        touch {output.unrelated_fix_flag} && \
+        echo Done with unrelated fam fix"
 
 rule create_covar_subsets_for_final_datasets:
     """ fgreps out subsets of the covariate file for the datasets."""
